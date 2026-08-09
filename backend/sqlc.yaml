@@ -1,0 +1,25 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema:
+      - migrations/000001_initial.up.sql
+      - migrations/000002_household_integrity.up.sql
+      - migrations/000003_sessions_tasks_and_ledger.up.sql
+      - migrations/000004_ledger_amount.up.sql
+      - migrations/000005_parent_auth.up.sql
+      - migrations/000006_auth_attempt_audit.up.sql
+      - migrations/000007_child_profiles.up.sql
+      - migrations/000008_habit_scheduling.up.sql
+      - migrations/000009_phase5_mutation_guards.up.sql
+      - migrations/000010_occurrence_history_generation.up.sql
+      - migrations/000011_phase7_points.up.sql
+      - migrations/000012_phase7_ledger_integrity.up.sql
+    queries: internal/database/queries
+    gen:
+      go:
+        package: dbgen
+        out: internal/database/dbgen
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true

@@ -1,0 +1,107 @@
+name: family-habit
+
+services:
+  postgres:
+    image: family-habit-postgres
+    build:
+      context: .
+      dockerfile: Postgres.Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-family_habit}
+      POSTGRES_USER: ${POSTGRES_USER:-family_habit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-family_habit_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [private]
+
+  api:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-family_habit}:${POSTGRES_PASSWORD:-family_habit_dev}@postgres:5432/${POSTGRES_DB:-family_habit}?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [private]
+
+  migrate:
+    build:
+      context: ../backend
+    restart: "no"
+    entrypoint: ["/usr/local/bin/migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-family_habit}:${POSTGRES_PASSWORD:-family_habit_dev}@postgres:5432/${POSTGRES_DB:-family_habit}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [private]
+
+  frontend:
+    build:
+      context: ../frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [private]
+
+  caddy:
+    image: family-habit-caddy
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    networks: [private]
+
+networks:
+  private:
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
