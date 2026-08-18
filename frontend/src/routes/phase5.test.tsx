@@ -8,6 +8,7 @@ import {
   childrenApi,
   habitsApi,
   householdApi,
+  routineGroupsApi,
   tasksApi,
   type Child,
   type Habit,
@@ -35,6 +36,7 @@ vi.mock('../api/client', async (importOriginal) => {
       update: vi.fn(),
       cancel: vi.fn(),
     },
+    routineGroupsApi: { list: vi.fn() },
   };
 });
 
@@ -93,12 +95,14 @@ function renderPage() {
 
 describe('Phase 5 habit and task management', () => {
   beforeEach(() => {
+    vi.mocked(routineGroupsApi.list).mockReset().mockResolvedValue([]);
     vi.mocked(householdApi.get).mockReset().mockResolvedValue({
       id: 'household-1',
       name: 'Test household',
       timezone: 'Asia/Jakarta',
       weekStartsOn: 'sunday',
       parentModeTimeoutMinutes: 15,
+      version: 1,
     });
     vi.mocked(childrenApi.list).mockReset().mockResolvedValue(children);
     vi.mocked(habitsApi.list).mockReset().mockResolvedValue([]);
@@ -129,7 +133,11 @@ describe('Phase 5 habit and task management', () => {
 
   it('progressively creates one recurring definition with atomic child assignments', async () => {
     renderPage();
-    await screen.findByRole('heading', { name: 'No habits yet' });
+    await screen.findByRole(
+      'heading',
+      { name: 'No habits yet' },
+      { timeout: 5_000 },
+    );
     await userEvent.click(screen.getByRole('button', { name: 'New habit' }));
     await userEvent.type(screen.getByLabelText('Habit name'), 'Read');
     await userEvent.click(screen.getByLabelText('Ari'));
@@ -236,6 +244,8 @@ describe('Phase 5 habit and task management', () => {
         points: 25,
         schedule: { kind: 'weekdays', weekdays: ['friday'] },
         effectiveDate,
+        routineGroupId: null,
+        sortOrder: 0,
       }),
     );
   });

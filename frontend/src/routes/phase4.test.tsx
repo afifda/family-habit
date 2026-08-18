@@ -5,7 +5,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { childrenApi, profilesApi, type Child } from '../api/client';
+import {
+  childrenApi,
+  overviewApi,
+  profilesApi,
+  type Child,
+} from '../api/client';
 import { RequireParent } from '../auth/RequireParent';
 import { ChildShell } from './ChildShell';
 import { Children } from './Children';
@@ -28,6 +33,7 @@ vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
   return {
     ...actual,
+    overviewApi: { get: vi.fn() },
     profilesApi: { list: vi.fn() },
     childrenApi: {
       list: vi.fn(),
@@ -76,6 +82,7 @@ describe('Phase 4 shared profile experience', () => {
     auth.session.parentMode = false;
     auth.enterChild.mockReset();
     auth.leaveChild.mockReset();
+    vi.mocked(overviewApi.get).mockReset();
     vi.mocked(profilesApi.list).mockReset();
     vi.mocked(childrenApi.list).mockReset();
     vi.mocked(childrenApi.create).mockReset();
@@ -145,6 +152,53 @@ describe('Phase 4 shared profile experience', () => {
       childId: profile.id,
       pin: '123456',
     });
+  });
+
+  it('adds parent-only approved and waiting points to the post-login profile cards', async () => {
+    auth.session.actor = 'parent';
+    auth.session.parentMode = true;
+    vi.mocked(profilesApi.list).mockResolvedValue([profile]);
+    vi.mocked(overviewApi.get).mockResolvedValue({
+      date: '2026-08-09',
+      timezone: 'Asia/Jakarta',
+      pending: 1,
+      children: [
+        {
+          childId: profile.id,
+          nickname: profile.nickname,
+          avatar: profile.avatar,
+          color: profile.color,
+          completed: 1,
+          total: 2,
+          pending: 1,
+          approvedPointsToday: 12,
+          waitingPointsToday: 5,
+        },
+      ],
+    });
+
+    renderWithApp(<ProfilePicker />);
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Ari, 12 approved points and 5 waiting points today, PIN required',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Approved today')).toBeInTheDocument();
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+  });
+
+  it('does not request parent point totals outside Parent Mode', async () => {
+    vi.mocked(profilesApi.list).mockResolvedValue([profile]);
+    renderWithApp(<ProfilePicker />);
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Ari, PIN required',
+      }),
+    ).toBeInTheDocument();
+    expect(overviewApi.get).not.toHaveBeenCalled();
+    expect(screen.queryByText('Approved today')).not.toBeInTheDocument();
   });
 
   it('identifies the exact active child and leaves through the server transition', async () => {

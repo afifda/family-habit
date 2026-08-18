@@ -16,12 +16,13 @@ import (
 )
 
 var (
-	ErrForbidden       = errors.New("forbidden")
-	ErrNotFound        = errors.New("not found")
-	ErrInvalidState    = errors.New("invalid state transition")
-	ErrVersionConflict = errors.New("version conflict")
-	ErrIdempotency     = errors.New("idempotency conflict")
-	ErrValidation      = errors.New("validation")
+	ErrForbidden             = errors.New("forbidden")
+	ErrNotFound              = errors.New("not found")
+	ErrInvalidState          = errors.New("invalid state transition")
+	ErrVersionConflict       = errors.New("version conflict")
+	ErrIdempotency           = errors.New("idempotency conflict")
+	ErrValidation            = errors.New("validation")
+	ErrInsufficientAvailable = errors.New("insufficient available points")
 )
 
 type TransitionError struct {
@@ -132,6 +133,8 @@ type Report struct {
 	Cancelled         int64  `json:"cancelled"`
 	PointsEarned      int64  `json:"pointsEarned"`
 	ManualCorrections int64  `json:"manualCorrections"`
+	PointsRedeemed    int64  `json:"pointsRedeemed"`
+	PointsRefunded    int64  `json:"pointsRefunded"`
 	NetPointsChange   int64  `json:"netPointsChange"`
 }
 
@@ -280,6 +283,13 @@ func (s *Service) decide(ctx context.Context, sessionID, familyID, completionID,
 	if decision != "approved" && decision != "rejected" {
 		return out, false, ErrValidation
 	}
+	// The child row is the serialization boundary for every balance-affecting
+	// operation, including awards and reward reservations.
+	if decision == "approved" {
+		if _, err = tx.Exec(ctx, `SELECT 1 FROM children WHERE id=$1 AND family_id=$2 FOR UPDATE`, out.ChildID, familyID); err != nil {
+			return out, false, err
+		}
+	}
 	err = tx.QueryRow(ctx, `UPDATE completion_attempts SET decision=$2,decided_at=now(),decided_by=$3,decision_note=nullif($4,'') WHERE id=$1 RETURNING decision::text,decided_at,coalesce(decision_note,'')`, completionID, decision, userID, strings.TrimSpace(reason)).Scan(&out.AttemptStatus, &out.DecidedAt, &out.Reason)
 	if err != nil {
 		return out, false, err
@@ -381,6 +391,18 @@ func (s *Service) Reverse(ctx context.Context, sessionID, familyID, completionID
 	}
 	if out.AttemptStatus != "approved" || out.OccurrenceStatus != "approved" {
 		return out, false, &TransitionError{ErrInvalidState, out.OccurrenceStatus, out.Version}
+	}
+	// Serialize against child redemption and correction transactions. An award
+	// that has already been reserved/spent cannot be reversed below zero.
+	if _, err = tx.Exec(ctx, `SELECT 1 FROM children WHERE id=$1 AND family_id=$2 FOR UPDATE`, out.ChildID, familyID); err != nil {
+		return out, false, err
+	}
+	var balance int64
+	if err = tx.QueryRow(ctx, `SELECT coalesce(sum(amount),0) FROM point_ledger WHERE family_id=$1 AND child_id=$2`, familyID, out.ChildID).Scan(&balance); err != nil {
+		return out, false, err
+	}
+	if balance < out.Points {
+		return out, false, ErrInsufficientAvailable
 	}
 	if err = tx.QueryRow(ctx, `UPDATE occurrences SET state='approval_reversed',version=version+1,updated_at=now() WHERE id=$1 RETURNING version`, out.OccurrenceID).Scan(&out.Version); err != nil {
 		return out, false, err
@@ -676,7 +698,11 @@ func (s *Service) Report(ctx context.Context, sessionID, familyID, childID, peri
 	if err != nil {
 		return out, fmt.Errorf("report: %w", err)
 	}
-	out.NetPointsChange = out.PointsEarned + out.ManualCorrections
+	err = tx.QueryRow(ctx, `SELECT coalesce(-sum(amount) FILTER(WHERE kind='reward_redemption'),0),coalesce(sum(amount) FILTER(WHERE kind='reward_refund'),0) FROM point_ledger pl JOIN families f ON f.id=pl.family_id WHERE pl.family_id=$1 AND pl.child_id=$2 AND (pl.created_at AT TIME ZONE f.timezone)::date BETWEEN $3 AND $4`, familyID, childID, start, end).Scan(&out.PointsRedeemed, &out.PointsRefunded)
+	if err != nil {
+		return out, fmt.Errorf("report rewards: %w", err)
+	}
+	out.NetPointsChange = out.PointsEarned + out.ManualCorrections - out.PointsRedeemed + out.PointsRefunded
 	return out, tx.Commit(ctx)
 }
 

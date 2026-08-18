@@ -136,14 +136,12 @@ describe('Child Today', () => {
   it('groups activities with child-friendly type, points, and neutral due labels', async () => {
     renderToday();
     expect(
-      await screen.findByRole('heading', { name: 'To do · 2' }),
+      await screen.findByRole('heading', { name: 'Other · 4' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Waiting for parent · 1' }),
+      screen.getByRole('radio', { name: 'Waiting · 1' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Done · 1' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Done · 1' })).toBeInTheDocument();
     expect(
       screen.getByText(/One-off task · Still to do · Due Aug 8 · 8 points/),
     ).toBeInTheDocument();
@@ -235,7 +233,7 @@ describe('Child Today', () => {
     await user.keyboard('{Escape}');
 
     const destination = screen.getByRole('heading', {
-      name: /Waiting for parent/,
+      name: /Other/,
     });
     await waitFor(() => expect(destination).toHaveFocus());
   });
@@ -270,7 +268,7 @@ describe('Child Today', () => {
       ),
     );
     expect(
-      await screen.findByRole('heading', { name: 'To do · 3' }),
+      await screen.findByRole('radio', { name: 'To do · 3' }),
     ).toBeInTheDocument();
   });
 
@@ -282,7 +280,7 @@ describe('Child Today', () => {
     await user.click(actions[0]!);
     expect(await screen.findByRole('alert')).toHaveTextContent('Try again');
     expect(
-      screen.getByRole('heading', { name: 'To do · 2' }),
+      screen.getByRole('radio', { name: 'To do · 2' }),
     ).toBeInTheDocument();
     expect(mocks.get).toHaveBeenCalledTimes(1);
     const firstKey = mocks.submit.mock.calls[0]?.[2] as string;

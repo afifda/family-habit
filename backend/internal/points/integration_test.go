@@ -46,20 +46,13 @@ func TestPointsLedgerAndReportingIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	habitSvc := habits.NewService(pool)
-	habit, _, err := habitSvc.CreateHabit(ctx, parent.ID, parent.UserID, parent.FamilyID, "habit-"+suffix, []byte("habit"+suffix), habits.HabitInput{Title: "Read", Description: "Ten pages", Icon: "book", Color: "#334455"})
+	task, _, err := habitSvc.CreateTask(ctx, parent.ID, parent.UserID, parent.FamilyID, "task-"+suffix, []byte("task"+suffix), habits.TaskInput{ChildID: child.ID, Title: "Read", Description: "Ten pages", DueDate: mustPointDate(t, "2026-08-09"), Points: 7})
 	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = habitSvc.CreateAssignment(ctx, parent.ID, parent.UserID, parent.FamilyID, habit.ID, "assign-"+suffix, []byte("assign"+suffix), habits.AssignmentInput{ChildID: child.ID, Points: 7, Kind: "daily", EffectiveDate: mustPointDate(t, "2026-07-01")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = habitSvc.EnsureDate(ctx, parent.FamilyID, mustPointDate(t, "2026-08-09")); err != nil {
 		t.Fatal(err)
 	}
 	var occurrence string
 	var version int64
-	if err = pool.QueryRow(ctx, `SELECT id,version FROM occurrences WHERE family_id=$1 AND child_id=$2 AND local_date='2026-08-09'`, parent.FamilyID, child.ID).Scan(&occurrence, &version); err != nil {
+	if err = pool.QueryRow(ctx, `SELECT id,version FROM occurrences WHERE family_id=$1 AND task_id=$2`, parent.FamilyID, task.ID).Scan(&occurrence, &version); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = pool.Exec(ctx, `UPDATE sessions SET mode='child',active_child_id=$2,parent_unlocked_at=NULL WHERE id=$1`, parent.ID, child.ID); err != nil {

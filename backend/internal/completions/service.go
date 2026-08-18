@@ -52,6 +52,9 @@ type Occurrence struct {
 	Points, Version                                                        int64
 	Status, Group, DueState, CompletionID                                  string
 	AvailableActions                                                       []string
+	RoutineGroupID, RoutineGroupName, RoutineGroupIcon, RoutineGroupColor  string
+	RoutineGroupSortOrder                                                  *int
+	ItemSortOrder                                                          int
 }
 
 type Completion struct {
@@ -105,7 +108,7 @@ func (s *Service) Today(ctx context.Context, sessionID, familyID, childID, date 
 	}
 	rows, err := s.pool.Query(ctx, `SELECT o.id,o.child_id,o.item_type_snapshot,o.local_date,o.due_date,o.title_snapshot,
 		o.description_snapshot,o.icon_snapshot,o.color_snapshot,o.points_snapshot,o.state::text,o.version,
-		coalesce(ca.id::text,'')
+		coalesce(ca.id::text,''),coalesce(o.routine_group_id_snapshot::text,''),coalesce(o.routine_group_name_snapshot,''),coalesce(o.routine_group_icon_snapshot,''),coalesce(o.routine_group_color_snapshot,''),o.routine_group_sort_order_snapshot,o.item_sort_order_snapshot
 		FROM occurrences o LEFT JOIN completion_attempts ca ON ca.occurrence_id=o.id AND ca.decision='pending'
 		WHERE o.family_id=$1 AND o.child_id=$2 AND (
 			(o.local_date=$3) OR
@@ -120,7 +123,7 @@ func (s *Service) Today(ctx context.Context, sessionID, familyID, childID, date 
 		var o Occurrence
 		var localDate time.Time
 		var dueDate *time.Time
-		if err = rows.Scan(&o.ID, &o.ChildID, &o.Type, &localDate, &dueDate, &o.Title, &o.Description, &o.Icon, &o.Color, &o.Points, &o.Status, &o.Version, &o.CompletionID); err != nil {
+		if err = rows.Scan(&o.ID, &o.ChildID, &o.Type, &localDate, &dueDate, &o.Title, &o.Description, &o.Icon, &o.Color, &o.Points, &o.Status, &o.Version, &o.CompletionID, &o.RoutineGroupID, &o.RoutineGroupName, &o.RoutineGroupIcon, &o.RoutineGroupColor, &o.RoutineGroupSortOrder, &o.ItemSortOrder); err != nil {
 			return Today{}, err
 		}
 		o.LocalDate = localDate.Format("2006-01-02")
@@ -160,6 +163,15 @@ func (s *Service) Today(ctx context.Context, sessionID, familyID, childID, date 
 	groupRank := map[string]int{"to_do": 0, "waiting_for_parent": 1, "done": 2}
 	sort.Slice(out.Occurrences, func(i, j int) bool {
 		a, b := out.Occurrences[i], out.Occurrences[j]
+		if (a.RoutineGroupSortOrder == nil) != (b.RoutineGroupSortOrder == nil) {
+			return a.RoutineGroupSortOrder != nil
+		}
+		if a.RoutineGroupSortOrder != nil && *a.RoutineGroupSortOrder != *b.RoutineGroupSortOrder {
+			return *a.RoutineGroupSortOrder < *b.RoutineGroupSortOrder
+		}
+		if a.ItemSortOrder != b.ItemSortOrder {
+			return a.ItemSortOrder < b.ItemSortOrder
+		}
 		if groupRank[a.Group] != groupRank[b.Group] {
 			return groupRank[a.Group] < groupRank[b.Group]
 		}

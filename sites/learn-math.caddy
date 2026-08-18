@@ -1,0 +1,6 @@
+learn-math.doublea.web.id {
+	encode zstd gzip
+	import app_security_headers
+	root * /srv/sites/learn-math
+	file_server
+}

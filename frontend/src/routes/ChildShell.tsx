@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 
-import { profilesApi } from '../api/client';
+import { profilesApi, rewardsApi } from '../api/client';
 import { messageForError } from '../api/errors';
 import { useAuth } from '../auth/AuthProvider';
 import { ChildAvatar } from '../components/ChildAvatar';
@@ -16,6 +16,12 @@ export function ChildShell() {
     queryKey: ['profiles'],
     queryFn: () => profilesApi.list(),
     enabled: session?.actor === 'child' && Boolean(session.childId),
+  });
+  const rewards = useQuery({
+    queryKey: ['child-rewards'],
+    queryFn: () => rewardsApi.childCatalog(),
+    enabled: session?.actor === 'child' && Boolean(session.childId),
+    retry: false,
   });
 
   if (loading)
@@ -92,6 +98,7 @@ export function ChildShell() {
       <nav className="child-navigation" aria-label="Child navigation">
         <NavLink to="/child/today">Today</NavLink>
         <NavLink to="/child/points">My points</NavLink>
+        {rewards.isSuccess && <NavLink to="/child/rewards">Rewards</NavLink>}
       </nav>
       <main
         className="main-content child-content"

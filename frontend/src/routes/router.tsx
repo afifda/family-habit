@@ -16,6 +16,9 @@ import { Reports } from './Reports';
 import { ReviewQueue } from './ReviewQueue';
 import { ParentOverview } from './ParentOverview';
 import { HouseholdSettings } from './HouseholdSettings';
+import { RoutineGroups } from './RoutineGroups';
+import { ParentRewards } from './ParentRewards';
+import { ChildRewards } from './ChildRewards';
 
 export const router = createBrowserRouter([
   { path: '/', element: <ProfilePicker /> },
@@ -46,6 +49,14 @@ export const router = createBrowserRouter([
             element: <HabitsTasks />,
           },
           {
+            path: 'routines',
+            element: <RoutineGroups />,
+          },
+          {
+            path: 'rewards',
+            element: <ParentRewards />,
+          },
+          {
             path: 'reports',
             element: <Reports />,
           },
@@ -68,6 +79,10 @@ export const router = createBrowserRouter([
       {
         path: 'points',
         element: <ChildPoints />,
+      },
+      {
+        path: 'rewards',
+        element: <ChildRewards />,
       },
     ],
   },

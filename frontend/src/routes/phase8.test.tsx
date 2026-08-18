@@ -49,6 +49,7 @@ const household = {
   timezone: 'Asia/Jakarta',
   weekStartsOn: 'monday' as const,
   parentModeTimeoutMinutes: 15 as const,
+  version: 1,
 };
 
 describe('Phase 8 integrated frontend quality', () => {
@@ -73,6 +74,8 @@ describe('Phase 8 integrated frontend quality', () => {
           completed: 3,
           total: 4,
           pending: 1,
+          approvedPointsToday: 24,
+          waitingPointsToday: 8,
         },
       ],
     });

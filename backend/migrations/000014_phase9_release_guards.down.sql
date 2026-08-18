@@ -1,0 +1,11 @@
+DROP INDEX IF EXISTS routine_groups_active_sort_order;
+ALTER TABLE routine_groups DROP CONSTRAINT IF EXISTS routine_groups_icon_safe;
+ALTER TABLE rewards DROP CONSTRAINT IF EXISTS rewards_icon_safe;
+DROP TRIGGER IF EXISTS reward_availability_selected_scope_guard ON reward_child_availability;
+DROP TRIGGER IF EXISTS rewards_selected_scope_guard ON rewards;
+DROP FUNCTION IF EXISTS validate_selected_reward_scope();
+DROP FUNCTION IF EXISTS validate_removed_reward_availability();
+DROP TRIGGER IF EXISTS reward_ledger_commit_guard ON point_ledger;
+DROP FUNCTION IF EXISTS validate_reward_ledger_commit();
+ALTER TABLE reward_redemptions DROP CONSTRAINT IF EXISTS redemptions_decider_household_fk;
+ALTER TABLE families DROP COLUMN IF EXISTS version;

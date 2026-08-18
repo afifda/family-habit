@@ -46,18 +46,26 @@ func (a *authAPI) parentOverview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		completed, pending := 0, 0
+		approvedPoints, waitingPoints := int64(0), int64(0)
 		for _, occurrence := range today.Occurrences {
 			if occurrence.Group == "done" {
 				completed++
+				if occurrence.LocalDate == date {
+					approvedPoints += occurrence.Points
+				}
 			}
 			if occurrence.Group == "waiting_for_parent" {
 				pending++
+				if occurrence.LocalDate == date {
+					waitingPoints += occurrence.Points
+				}
 			}
 		}
 		pendingTotal += pending
 		items = append(items, map[string]any{
 			"childId": child.ID, "nickname": child.Nickname, "avatar": child.Avatar, "color": child.Color,
 			"completed": completed, "total": len(today.Occurrences), "pending": pending,
+			"approvedPointsToday": approvedPoints, "waitingPointsToday": waitingPoints,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"date": date, "timezone": timezone, "pending": pendingTotal, "children": items}})
@@ -333,6 +341,8 @@ func handlePointError(w http.ResponseWriter, err error) bool {
 		writeError(w, 409, "idempotency_conflict", "The Idempotency-Key was already used for another request.")
 	case errors.Is(err, points.ErrValidation):
 		writeValidation(w, []validationIssue{{"request", "invalid", "Check the request values."}})
+	case errors.Is(err, points.ErrInsufficientAvailable):
+		writeError(w, 409, "insufficient_available_points", "The awarded points have already been reserved or spent.")
 	default:
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 	}

@@ -5,6 +5,7 @@ import {
   householdApi,
   overviewApi,
   profilesApi,
+  rewardsApi,
   reviewApi,
   todayApi,
 } from './client';
@@ -108,6 +109,7 @@ describe('Phase 8 parent integration API client', () => {
             timezone: 'Europe/Berlin',
             weekStartsOn: 'monday',
             parentModeTimeoutMinutes: 15,
+            version: 1,
           },
         }),
         { status: 200 },
@@ -127,6 +129,52 @@ describe('Phase 8 parent integration API client', () => {
     expect(JSON.parse(init.body as string)).toEqual(
       expect.objectContaining({ parentPin: '123456' }),
     );
+  });
+
+  it('sends version and a stable caller key for the rewards toggle', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            id: 'household-1',
+            name: 'River Family',
+            timezone: 'Europe/Berlin',
+            weekStartsOn: 'monday',
+            parentModeTimeoutMinutes: 15,
+            rewardsEnabled: true,
+            version: 4,
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await householdApi.update(
+      { rewardsEnabled: true },
+      { version: 3, idempotencyKey: 'toggle-rewards-1' },
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get('If-Match')).toBe('3');
+    expect(headers.get('Idempotency-Key')).toBe('toggle-rewards-1');
+  });
+});
+
+describe('Phase 9 rewards API client', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('archives rewards through the explicit archive action route', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    await rewardsApi.archive('reward-1', 3);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/rewards/reward-1/archive');
+    expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('If-Match')).toBe('3');
   });
 });
 

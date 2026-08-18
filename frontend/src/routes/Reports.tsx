@@ -184,6 +184,8 @@ export function Reports() {
             ['Still to do', report.data.incomplete],
             ['Cancelled', report.data.cancelled],
             ['Points earned', report.data.pointsEarned],
+            ['Points redeemed', report.data.pointsRedeemed ?? 0],
+            ['Points refunded', report.data.pointsRefunded ?? 0],
             ['Bonus points', report.data.manualCorrections],
             ['Net points change', report.data.netPointsChange],
           ]

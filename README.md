@@ -2,7 +2,7 @@
 
 Habit Home is a private, child-friendly family habit tracker. Parents manage children, recurring habits, one-off tasks, approvals, reports, and points; children use a focused shared-device experience to see and submit today's work.
 
-Current status: Phase 7 parent review, points, history, and reporting complete; ready for Phase 8. See the [roadmap](plan/roadmap.md) and [Phase 7 validation](docs/phase-7-validation.md).
+Current status: Phase 8 automated integration and quality work is substantially complete, with its manual release evidence still open. Phase 9 dynamic routines and optional rewards is approved for immediate implementation ahead of VPS launch. See the [roadmap](plan/roadmap.md) and [feature plan](plan/routine-groups-and-rewards.md).
 
 ## Stack
 

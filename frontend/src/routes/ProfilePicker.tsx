@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
-import { profilesApi, type Profile } from '../api/client';
+import { overviewApi, profilesApi, type Profile } from '../api/client';
 import { messageForError } from '../api/errors';
 import { useAuth } from '../auth/AuthProvider';
 import { ChildAvatar } from '../components/ChildAvatar';
@@ -20,6 +20,11 @@ export function ProfilePicker() {
     queryKey: ['profiles'],
     queryFn: () => profilesApi.list(),
     enabled: Boolean(session),
+  });
+  const overview = useQuery({
+    queryKey: ['parent', 'overview', 'profile-picker'],
+    queryFn: () => overviewApi.get(),
+    enabled: session?.actor === 'parent' && session.parentMode,
   });
 
   if (loading)
@@ -54,6 +59,16 @@ export function ProfilePicker() {
     }
   }
 
+  const todayPointsByChild = new Map(
+    (overview.data?.children ?? []).map((child) => [
+      child.childId,
+      {
+        approved: child.approvedPointsToday,
+        waiting: child.waitingPointsToday,
+      },
+    ]),
+  );
+
   return (
     <main className="profile-page" id="main-content">
       <section className="profile-card" aria-labelledby="profile-heading">
@@ -87,26 +102,44 @@ export function ProfilePicker() {
         )}
         {!profiles.isPending && !profiles.isError && (
           <div className="profile-grid" aria-label="Family profiles">
-            {profiles.data?.map((child) => (
-              <button
-                className="profile-choice"
-                type="button"
-                key={child.id}
-                disabled={entering}
-                onClick={() => void choose(child)}
-                aria-label={`${child.nickname}${child.pinRequired ? ', PIN required' : ''}`}
-              >
-                <ChildAvatar
-                  avatar={child.avatar}
-                  color={child.color}
-                  size="large"
-                />
-                <strong>{child.nickname}</strong>
-                <small>
-                  {child.pinRequired ? 'PIN required' : 'Tap to enter'}
-                </small>
-              </button>
-            ))}
+            {profiles.data?.map((child) => {
+              const points = todayPointsByChild.get(child.id);
+              const pointLabel = points
+                ? `, ${points.approved} approved points and ${points.waiting} waiting points today`
+                : '';
+              return (
+                <button
+                  className="profile-choice"
+                  type="button"
+                  key={child.id}
+                  disabled={entering}
+                  onClick={() => void choose(child)}
+                  aria-label={`${child.nickname}${pointLabel}${child.pinRequired ? ', PIN required' : ''}`}
+                >
+                  <ChildAvatar
+                    avatar={child.avatar}
+                    color={child.color}
+                    size="large"
+                  />
+                  <strong>{child.nickname}</strong>
+                  {points && (
+                    <span className="profile-points" aria-hidden="true">
+                      <span>
+                        <strong>{points.approved}</strong>
+                        <small>Approved today</small>
+                      </span>
+                      <span>
+                        <strong>{points.waiting}</strong>
+                        <small>Waiting</small>
+                      </span>
+                    </span>
+                  )}
+                  <small>
+                    {child.pinRequired ? 'PIN required' : 'Tap to enter'}
+                  </small>
+                </button>
+              );
+            })}
             <Link
               className="profile-choice"
               to="/parent/unlock"

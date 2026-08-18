@@ -1,0 +1,6 @@
+doublea.web.id {
+	encode zstd gzip
+	import app_security_headers
+	root * /srv/sites/root
+	file_server
+}

@@ -1,0 +1,6 @@
+learn-coding.doublea.web.id {
+	encode zstd gzip
+	import app_security_headers
+	root * /srv/sites/learn-coding
+	file_server
+}

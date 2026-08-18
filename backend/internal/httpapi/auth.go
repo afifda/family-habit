@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,8 @@ import (
 	"github.com/family-habit/family-habit/backend/internal/completions"
 	"github.com/family-habit/family-habit/backend/internal/habits"
 	"github.com/family-habit/family-habit/backend/internal/points"
+	"github.com/family-habit/family-habit/backend/internal/rewards"
+	"github.com/family-habit/family-habit/backend/internal/routines"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,6 +39,8 @@ type authAPI struct {
 	habits      *habits.Service
 	completions *completions.Service
 	points      *points.Service
+	rewards     *rewards.Service
+	routines    *routines.Service
 }
 
 func (a *authAPI) routes(mux *http.ServeMux) {
@@ -50,6 +56,7 @@ func (a *authAPI) routes(mux *http.ServeMux) {
 	a.habitRoutes(mux)
 	a.completionRoutes(mux)
 	a.pointRoutes(mux)
+	a.phase9Routes(mux)
 }
 
 type registerInput struct {
@@ -250,6 +257,7 @@ type householdPatch struct {
 	WeekStartsOn             *string         `json:"weekStartsOn"`
 	ParentModeTimeoutMinutes *int16          `json:"parentModeTimeoutMinutes"`
 	ParentPin                json.RawMessage `json:"parentPin"`
+	RewardsEnabled           *bool           `json:"rewardsEnabled"`
 }
 
 func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
@@ -258,6 +266,18 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	issues := []validationIssue{}
+	var mutationKey string
+	var expected *int64
+	if in.RewardsEnabled != nil {
+		var more []validationIssue
+		mutationKey, more = idem(r)
+		issues = append(issues, more...)
+		expected, more = expectedVersion(r)
+		issues = append(issues, more...)
+		if expected == nil {
+			issues = append(issues, validationIssue{"If-Match", "required", "Provide the current household version."})
+		}
+	}
 	if in.Name != nil {
 		v := strings.TrimSpace(*in.Name)
 		in.Name = &v
@@ -287,7 +307,7 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, issues)
 		return
 	}
-	if in.Name == nil && in.Timezone == nil && week == nil && in.ParentModeTimeoutMinutes == nil && in.ParentPin == nil {
+	if in.Name == nil && in.Timezone == nil && week == nil && in.ParentModeTimeoutMinutes == nil && in.ParentPin == nil && in.RewardsEnabled == nil {
 		writeValidation(w, []validationIssue{{"body", "required", "Provide at least one setting."}})
 		return
 	}
@@ -308,12 +328,66 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s := sessionFrom(r.Context())
+	var householdReply []byte
+	var householdVersion int64
 	tx, err := a.pool.Begin(r.Context())
+	if err == nil && in.RewardsEnabled != nil {
+		requestHash := sha256.Sum256([]byte("household.rewards|" + mutationKey + "|" + string(hashBody(in))))
+		var tag pgconn.CommandTag
+		if err == nil {
+			tag, err = tx.Exec(r.Context(), `INSERT INTO idempotency_records(family_id,session_id,route_family,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES($1,$2,'household.rewards',$3,$4,200,'{}',now()+interval '24 hours') ON CONFLICT DO NOTHING`, s.FamilyID, s.ID, mutationKey, requestHash[:])
+		}
+		if err == nil && tag.RowsAffected() == 0 {
+			var old []byte
+			err = tx.QueryRow(r.Context(), `SELECT request_hash,response_body FROM idempotency_records WHERE family_id=$1 AND session_id=$2 AND route_family='household.rewards' AND idempotency_key=$3 FOR UPDATE`, s.FamilyID, s.ID, mutationKey).Scan(&old, &householdReply)
+			if err == nil && !bytes.Equal(old, requestHash[:]) {
+				_ = tx.Rollback(r.Context())
+				writeError(w, 409, "idempotency_conflict", "This key was already used.")
+				return
+			}
+			if err == nil {
+				_ = tx.Commit(r.Context())
+				var saved struct {
+					Data struct {
+						Version int64 `json:"version"`
+					} `json:"data"`
+				}
+				if len(householdReply) == 0 || json.Unmarshal(householdReply, &saved) != nil || saved.Data.Version == 0 {
+					writeError(w, 500, "internal_error", "The saved response could not be restored.")
+					return
+				}
+				w.Header().Set("Idempotent-Replayed", "true")
+				w.Header().Set("ETag", strconv.FormatInt(saved.Data.Version, 10))
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(householdReply)
+				return
+			}
+		}
+		var current int64
+		if err == nil {
+			err = tx.QueryRow(r.Context(), `SELECT version FROM families WHERE id=$1 FOR UPDATE`, s.FamilyID).Scan(&current)
+		}
+		if err == nil && current != *expected {
+			_ = tx.Rollback(r.Context())
+			writeError(w, 409, "version_conflict", "Refresh household settings and try again.")
+			return
+		}
+	}
 	if err == nil {
-		_, err = tx.Exec(r.Context(), `UPDATE families SET name=coalesce($2,name),timezone=coalesce($3,timezone),week_starts_on=coalesce($4,week_starts_on),parent_idle_minutes=coalesce($5,parent_idle_minutes),updated_at=now() WHERE id=$1`, s.FamilyID, in.Name, in.Timezone, week, in.ParentModeTimeoutMinutes)
+		_, err = tx.Exec(r.Context(), `UPDATE families SET name=coalesce($2,name),timezone=coalesce($3,timezone),week_starts_on=coalesce($4,week_starts_on),parent_idle_minutes=coalesce($5,parent_idle_minutes),rewards_enabled=coalesce($6,rewards_enabled),version=version+CASE WHEN $6::boolean IS NULL THEN 0 ELSE 1 END,updated_at=now() WHERE id=$1`, s.FamilyID, in.Name, in.Timezone, week, in.ParentModeTimeoutMinutes, in.RewardsEnabled)
+	}
+	if err == nil && in.RewardsEnabled != nil {
+		_, err = tx.Exec(r.Context(), `INSERT INTO audit_events(family_id,actor_user_id,session_id,action,subject_type,subject_id,after_status,idempotency_key,metadata) VALUES($1,$2,$3,'household.rewards_updated','family',$1,$4,$5,jsonb_build_object('enabled',$6::boolean))`, s.FamilyID, s.UserID, s.ID, map[bool]string{true: "enabled", false: "disabled"}[*in.RewardsEnabled], mutationKey, *in.RewardsEnabled)
 	}
 	if err == nil && in.ParentPin != nil {
 		_, err = tx.Exec(r.Context(), `UPDATE users SET parent_pin_hash=$2,updated_at=now() WHERE id=$1`, s.UserID, pin)
+	}
+	if err == nil && in.RewardsEnabled != nil {
+		err = tx.QueryRow(r.Context(), `SELECT jsonb_build_object('data',jsonb_build_object('id',id,'name',name,'timezone',timezone,'weekStartsOn',CASE WHEN week_starts_on=1 THEN 'monday' ELSE 'sunday' END,'parentModeTimeoutMinutes',parent_idle_minutes,'rewardsEnabled',rewards_enabled,'version',version)),version FROM families WHERE id=$1`, s.FamilyID).Scan(&householdReply, &householdVersion)
+	}
+	if err == nil && in.RewardsEnabled != nil {
+		_, err = tx.Exec(r.Context(), `UPDATE idempotency_records SET response_body=$4::jsonb,response_status=200 WHERE family_id=$1 AND session_id=$2 AND route_family='household.rewards' AND idempotency_key=$3`, s.FamilyID, s.ID, mutationKey, householdReply)
 	}
 	if err == nil {
 		err = tx.Commit(r.Context())
@@ -324,12 +398,21 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
 	}
+	if in.RewardsEnabled != nil {
+		w.Header().Set("ETag", strconv.FormatInt(householdVersion, 10))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(householdReply)
+		return
+	}
 	a.householdResponse(w, r, s.FamilyID)
 }
 func (a *authAPI) householdResponse(w http.ResponseWriter, r *http.Request, id string) {
 	var name, tz string
 	var week, idle int
-	err := a.pool.QueryRow(r.Context(), `SELECT name,timezone,week_starts_on,parent_idle_minutes FROM families WHERE id=$1`, id).Scan(&name, &tz, &week, &idle)
+	var rewardsEnabled bool
+	var version int64
+	err := a.pool.QueryRow(r.Context(), `SELECT name,timezone,week_starts_on,parent_idle_minutes,rewards_enabled,version FROM families WHERE id=$1`, id).Scan(&name, &tz, &week, &idle, &rewardsEnabled, &version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, 404, "not_found", "Household not found.")
 		return
@@ -342,7 +425,8 @@ func (a *authAPI) householdResponse(w http.ResponseWriter, r *http.Request, id s
 	if week == 1 {
 		start = "monday"
 	}
-	writeJSON(w, 200, map[string]any{"data": map[string]any{"id": id, "name": name, "timezone": tz, "weekStartsOn": start, "parentModeTimeoutMinutes": idle}})
+	w.Header().Set("ETag", strconv.FormatInt(version, 10))
+	writeJSON(w, 200, map[string]any{"data": map[string]any{"id": id, "name": name, "timezone": tz, "weekStartsOn": start, "parentModeTimeoutMinutes": idle, "rewardsEnabled": rewardsEnabled, "version": version}})
 }
 
 func (a *authAPI) setCookie(w http.ResponseWriter, token string, expiry time.Time) {

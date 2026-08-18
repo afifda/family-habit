@@ -763,6 +763,33 @@ h2 {
   color: var(--color-muted);
 }
 
+.profile-points {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.profile-points span {
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft);
+}
+
+.profile-points strong,
+.profile-points small {
+  display: block;
+}
+
+.profile-points strong {
+  color: var(--color-brand-strong);
+}
+
+.profile-points small {
+  font-size: 0.78rem;
+}
+
 .avatar {
   width: 3.75rem;
   height: 3.75rem;
@@ -1510,6 +1537,207 @@ h2 {
   .card,
   .dialog,
   .notice {
+    border: 1px solid currentColor;
+  }
+}
+
+.routine-list,
+.reward-grid {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  list-style: none;
+}
+
+.routine-row,
+.reward-card,
+.reward-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.routine-copy,
+.reward-card > div,
+.reward-toggle > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.routine-copy {
+  display: grid;
+}
+
+.routine-copy small,
+.reward-card p {
+  overflow-wrap: anywhere;
+}
+
+.routine-swatch,
+.routine-heading-icon,
+.reward-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+}
+
+.routine-swatch,
+.reward-icon {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.4rem;
+}
+
+.routine-heading-icon {
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+.status-filters {
+  margin-block: var(--space-6);
+  padding: var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  border: 0;
+}
+
+.status-filters label {
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  white-space: nowrap;
+}
+
+.point-confirmation {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.point-confirmation div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.point-confirmation dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.eligibility-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.eligibility-grid {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+  list-style: none;
+}
+
+.eligibility-card,
+.child-eligibility {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.eligibility-metrics {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-3);
+}
+
+.eligibility-metrics div {
+  min-width: 0;
+}
+
+.eligibility-metrics dt {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.eligibility-metrics dd {
+  margin: var(--space-1) 0 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.rule-results {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.child-eligibility progress {
+  width: 100%;
+  min-height: 1rem;
+  accent-color: var(--color-primary);
+}
+
+.status-pill {
+  align-self: start;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrap th,
+.table-wrap td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+@media (max-width: 40rem) {
+  .routine-row,
+  .reward-card,
+  .reward-toggle {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .routine-row .card-actions,
+  .reward-card .card-actions,
+  .reward-card > .button {
+    width: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .routine-swatch,
+  .routine-heading-icon,
+  .reward-icon,
+  .status-filters label {
     border: 1px solid currentColor;
   }
 }

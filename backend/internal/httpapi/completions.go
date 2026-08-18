@@ -51,11 +51,16 @@ func (a *authAPI) childToday(w http.ResponseWriter, r *http.Request) {
 		if item.CompletionID != "" {
 			completionID = item.CompletionID
 		}
+		var routineGroup any
+		if item.RoutineGroupID != "" {
+			routineGroup = map[string]any{"id": item.RoutineGroupID, "name": item.RoutineGroupName, "icon": item.RoutineGroupIcon, "color": item.RoutineGroupColor, "sortOrder": item.RoutineGroupSortOrder}
+		}
 		items = append(items, map[string]any{
 			"id": item.ID, "childId": item.ChildID, "type": item.Type, "localDate": item.LocalDate, "dueDate": nilIfEmpty(item.DueDate),
 			"title": item.Title, "description": item.Description, "icon": item.Icon, "color": item.Color,
 			"points": item.Points, "status": item.Status, "group": item.Group, "dueState": item.DueState,
 			"completionId": completionID, "version": item.Version, "availableActions": item.AvailableActions,
+			"routineGroup": routineGroup, "itemSortOrder": item.ItemSortOrder,
 		})
 		counts[item.Group]++
 	}

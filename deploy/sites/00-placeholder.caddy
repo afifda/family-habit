@@ -1,0 +1,17 @@
+# Extra subdomain configs go in this directory as *.caddy files.
+# Static site example:
+#
+# docs.doublea.web.id {
+# 	encode zstd gzip
+# 	import app_security_headers
+# 	root * /srv/sites/docs
+# 	file_server
+# }
+#
+# Reverse proxy example for a different app container:
+#
+# app.doublea.web.id {
+# 	encode zstd gzip
+# 	import app_security_headers
+# 	reverse_proxy app:3000
+# }

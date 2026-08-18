@@ -39,6 +39,8 @@ type Schedule struct {
 
 type Assignment struct {
 	ID, HabitID, ChildID string
+	RoutineGroupID       *string
+	SortOrder            int32
 	Points               int32
 	Schedule             Schedule
 	EffectiveStartDate   time.Time
@@ -49,6 +51,8 @@ type Assignment struct {
 
 type Task struct {
 	ID, ChildID, Title, Description string
+	RoutineGroupID                  *string
+	SortOrder                       int32
 	DueDate                         time.Time
 	Points                          int32
 	Status                          string
@@ -67,13 +71,19 @@ type HabitInput struct {
 	DescriptionSet, IconSet, ColorSet bool
 }
 type AssignmentInput struct {
-	ChildID, Kind string
-	Points        int32
-	Weekdays      []int16
-	EffectiveDate time.Time
+	ChildID, Kind   string
+	RoutineGroupID  *string
+	RoutineGroupSet bool
+	SortOrder       int32
+	Points          int32
+	Weekdays        []int16
+	EffectiveDate   time.Time
 }
 type TaskInput struct {
 	ChildID, Title, Description string
+	RoutineGroupID              *string
+	RoutineGroupSet             bool
+	SortOrder                   int32
 	DueDate                     time.Time
 	Points                      int32
 	DescriptionSet              bool
@@ -113,7 +123,7 @@ func (s *Service) ListHabits(ctx context.Context, familyID string, active *bool)
 }
 
 func (s *Service) listAssignments(ctx context.Context, familyID, habitID string) ([]Assignment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT a.id,a.habit_id,a.child_id,a.points,sc.kind::text,sc.weekdays,a.effective_from,a.effective_until,a.effective_until IS NULL OR a.effective_until>=(now() AT TIME ZONE f.timezone)::date,a.version FROM habit_assignments a JOIN families f ON f.id=a.family_id JOIN habit_schedules sc ON sc.assignment_id=a.id WHERE a.family_id=$1 AND a.habit_id=$2 ORDER BY a.child_id,a.effective_from`, familyID, habitID)
+	rows, err := s.pool.Query(ctx, `SELECT a.id,a.habit_id,a.child_id,a.routine_group_id,a.sort_order,a.points,sc.kind::text,sc.weekdays,a.effective_from,a.effective_until,a.effective_until IS NULL OR a.effective_until>=(now() AT TIME ZONE f.timezone)::date,a.version FROM habit_assignments a JOIN families f ON f.id=a.family_id JOIN habit_schedules sc ON sc.assignment_id=a.id WHERE a.family_id=$1 AND a.habit_id=$2 ORDER BY a.child_id,a.effective_from`, familyID, habitID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +131,7 @@ func (s *Service) listAssignments(ctx context.Context, familyID, habitID string)
 	out := []Assignment{}
 	for rows.Next() {
 		var a Assignment
-		if err = rows.Scan(&a.ID, &a.HabitID, &a.ChildID, &a.Points, &a.Schedule.Kind, &a.Schedule.Weekdays, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version); err != nil {
+		if err = rows.Scan(&a.ID, &a.HabitID, &a.ChildID, &a.RoutineGroupID, &a.SortOrder, &a.Points, &a.Schedule.Kind, &a.Schedule.Weekdays, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -361,7 +371,7 @@ func (s *Service) CreateAssignment(ctx context.Context, sessionID, userID, famil
 		return Assignment{}, false, err
 	}
 	var a Assignment
-	err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from) VALUES($1,$2,$3,$4,$5) RETURNING id,habit_id,child_id,points,effective_from,effective_until,true,version`, familyID, habitID, in.ChildID, in.Points, in.EffectiveDate).Scan(&a.ID, &a.HabitID, &a.ChildID, &a.Points, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version)
+	err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from,routine_group_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,habit_id,child_id,routine_group_id,sort_order,points,effective_from,effective_until,true,version`, familyID, habitID, in.ChildID, in.Points, in.EffectiveDate, in.RoutineGroupID, in.SortOrder).Scan(&a.ID, &a.HabitID, &a.ChildID, &a.RoutineGroupID, &a.SortOrder, &a.Points, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Assignment{}, false, ErrNotFound
 	}
@@ -436,7 +446,7 @@ func (s *Service) CreateAssignments(ctx context.Context, sessionID, userID, fami
 			in.Weekdays = []int16{}
 		}
 		var a Assignment
-		err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from) VALUES($1,$2,$3,$4,$5) RETURNING id,habit_id,child_id,points,effective_from,effective_until,true,version`, familyID, habitID, in.ChildID, in.Points, in.EffectiveDate).Scan(&a.ID, &a.HabitID, &a.ChildID, &a.Points, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version)
+		err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from,routine_group_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,habit_id,child_id,routine_group_id,sort_order,points,effective_from,effective_until,true,version`, familyID, habitID, in.ChildID, in.Points, in.EffectiveDate, in.RoutineGroupID, in.SortOrder).Scan(&a.ID, &a.HabitID, &a.ChildID, &a.RoutineGroupID, &a.SortOrder, &a.Points, &a.EffectiveStartDate, &a.EffectiveUntil, &a.Active, &a.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, ErrNotFound
 		}
@@ -487,7 +497,7 @@ func (s *Service) UpdateAssignmentConditional(ctx context.Context, sessionID, us
 		return a, true, err
 	}
 	var old Assignment
-	err = tx.QueryRow(ctx, `SELECT a.id,a.habit_id,a.child_id,a.points,s.kind::text,s.weekdays,a.effective_from,a.effective_until,a.version FROM habit_assignments a JOIN habit_schedules s ON s.assignment_id=a.id WHERE a.id=$1 AND a.family_id=$2 AND a.effective_from<=$3 AND (a.effective_until IS NULL OR a.effective_until>=$3) FOR UPDATE OF a,s`, id, familyID, in.EffectiveDate).Scan(&old.ID, &old.HabitID, &old.ChildID, &old.Points, &old.Schedule.Kind, &old.Schedule.Weekdays, &old.EffectiveStartDate, &old.EffectiveUntil, &old.Version)
+	err = tx.QueryRow(ctx, `SELECT a.id,a.habit_id,a.child_id,a.routine_group_id,a.sort_order,a.points,s.kind::text,s.weekdays,a.effective_from,a.effective_until,a.version FROM habit_assignments a JOIN habit_schedules s ON s.assignment_id=a.id WHERE a.id=$1 AND a.family_id=$2 AND a.effective_from<=$3 AND (a.effective_until IS NULL OR a.effective_until>=$3) FOR UPDATE OF a,s`, id, familyID, in.EffectiveDate).Scan(&old.ID, &old.HabitID, &old.ChildID, &old.RoutineGroupID, &old.SortOrder, &old.Points, &old.Schedule.Kind, &old.Schedule.Weekdays, &old.EffectiveStartDate, &old.EffectiveUntil, &old.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Assignment{}, false, ErrNotFound
 	}
@@ -504,23 +514,28 @@ func (s *Service) UpdateAssignmentConditional(ctx context.Context, sessionID, us
 		in.Kind = old.Schedule.Kind
 		in.Weekdays = old.Schedule.Weekdays
 	}
+	if !in.RoutineGroupSet {
+		in.RoutineGroupID = old.RoutineGroupID
+	}
 	_, err = tx.Exec(ctx, `DELETE FROM occurrences WHERE assignment_id=$1 AND local_date>=$2 AND state='not_started' AND NOT EXISTS(SELECT 1 FROM completion_attempts ca WHERE ca.occurrence_id=occurrences.id)`, id, in.EffectiveDate)
 	if err != nil {
 		return Assignment{}, false, err
 	}
 	var out Assignment
 	if in.EffectiveDate.Equal(old.EffectiveStartDate) {
-		err = tx.QueryRow(ctx, `UPDATE habit_assignments SET points=$2,version=version+1 WHERE id=$1 RETURNING version`, id, in.Points).Scan(&old.Version)
+		err = tx.QueryRow(ctx, `UPDATE habit_assignments SET points=$2,routine_group_id=$3,sort_order=$4,version=version+1 WHERE id=$1 RETURNING version`, id, in.Points, in.RoutineGroupID, in.SortOrder).Scan(&old.Version)
 		if err == nil {
 			_, err = tx.Exec(ctx, `UPDATE habit_schedules SET kind=$2,weekdays=$3 WHERE assignment_id=$1`, id, in.Kind, in.Weekdays)
 		}
 		out = old
 		out.Points = in.Points
+		out.RoutineGroupID = in.RoutineGroupID
+		out.SortOrder = in.SortOrder
 		out.Schedule = Schedule{in.Kind, in.Weekdays}
 	} else {
 		_, err = tx.Exec(ctx, `UPDATE habit_assignments SET effective_until=$2::date-1,version=version+1 WHERE id=$1`, id, in.EffectiveDate)
 		if err == nil {
-			err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from,effective_until,supersedes_assignment_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,habit_id,child_id,points,effective_from,effective_until,true,version`, familyID, old.HabitID, old.ChildID, in.Points, in.EffectiveDate, old.EffectiveUntil, id).Scan(&out.ID, &out.HabitID, &out.ChildID, &out.Points, &out.EffectiveStartDate, &out.EffectiveUntil, &out.Active, &out.Version)
+			err = tx.QueryRow(ctx, `INSERT INTO habit_assignments(family_id,habit_id,child_id,points,effective_from,effective_until,supersedes_assignment_id,routine_group_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,habit_id,child_id,routine_group_id,sort_order,points,effective_from,effective_until,true,version`, familyID, old.HabitID, old.ChildID, in.Points, in.EffectiveDate, old.EffectiveUntil, id, in.RoutineGroupID, in.SortOrder).Scan(&out.ID, &out.HabitID, &out.ChildID, &out.RoutineGroupID, &out.SortOrder, &out.Points, &out.EffectiveStartDate, &out.EffectiveUntil, &out.Active, &out.Version)
 		}
 		if err == nil {
 			_, err = tx.Exec(ctx, `INSERT INTO habit_schedules(assignment_id,kind,weekdays) VALUES($1,$2,$3)`, out.ID, in.Kind, in.Weekdays)
@@ -597,7 +612,7 @@ func (s *Service) DeactivateAssignmentConditional(ctx context.Context, sessionID
 }
 
 func (s *Service) ListTasks(ctx context.Context, familyID string, childID, status string) ([]Task, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id,child_id,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version FROM one_off_tasks WHERE family_id=$1 AND ($2='' OR child_id::text=$2) AND ($3='' OR state::text=$3) ORDER BY due_date DESC,id`, familyID, childID, status)
+	rows, err := s.pool.Query(ctx, `SELECT id,child_id,routine_group_id,sort_order,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version FROM one_off_tasks WHERE family_id=$1 AND ($2='' OR child_id::text=$2) AND ($3='' OR state::text=$3) ORDER BY due_date DESC,id`, familyID, childID, status)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +620,7 @@ func (s *Service) ListTasks(ctx context.Context, familyID string, childID, statu
 	out := []Task{}
 	for rows.Next() {
 		var t Task
-		if err = rows.Scan(&t.ID, &t.ChildID, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version); err != nil {
+		if err = rows.Scan(&t.ID, &t.ChildID, &t.RoutineGroupID, &t.SortOrder, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -632,14 +647,14 @@ func (s *Service) CreateTask(ctx context.Context, sessionID, userID, familyID, k
 		return t, true, err
 	}
 	var t Task
-	err = tx.QueryRow(ctx, `INSERT INTO one_off_tasks(family_id,child_id,title,description,points,due_date) SELECT $1,$2,$3,nullif($4,''),$5,$6 WHERE EXISTS(SELECT 1 FROM children WHERE id=$2 AND family_id=$1 AND archived_at IS NULL) RETURNING id,child_id,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version`, familyID, in.ChildID, in.Title, in.Description, in.Points, in.DueDate).Scan(&t.ID, &t.ChildID, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
+	err = tx.QueryRow(ctx, `INSERT INTO one_off_tasks(family_id,child_id,title,description,points,due_date,routine_group_id,sort_order) SELECT $1,$2,$3,nullif($4,''),$5,$6,$7,$8 WHERE EXISTS(SELECT 1 FROM children WHERE id=$2 AND family_id=$1 AND archived_at IS NULL) RETURNING id,child_id,routine_group_id,sort_order,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version`, familyID, in.ChildID, in.Title, in.Description, in.Points, in.DueDate, in.RoutineGroupID, in.SortOrder).Scan(&t.ID, &t.ChildID, &t.RoutineGroupID, &t.SortOrder, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Task{}, false, ErrNotFound
 	}
 	if err != nil {
 		return Task{}, false, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO occurrences(family_id,task_id,child_id,local_date,title_snapshot,points_snapshot,source_type,due_date,item_type_snapshot) VALUES($1,$2,$3,$4,$5,$6,'task',$4,'task')`, familyID, t.ID, t.ChildID, t.DueDate, t.Title, t.Points)
+	_, err = tx.Exec(ctx, `INSERT INTO occurrences(family_id,task_id,child_id,local_date,title_snapshot,points_snapshot,source_type,due_date,item_type_snapshot,routine_group_id_snapshot,routine_group_name_snapshot,routine_group_icon_snapshot,routine_group_color_snapshot,routine_group_sort_order_snapshot,item_sort_order_snapshot) SELECT $1,$2,$3,$4,$5,$6,'task',$4,'task',g.id,g.name,g.icon,g.color,g.sort_order,$8 FROM (SELECT 1) x LEFT JOIN routine_groups g ON g.id=$7 AND g.family_id=$1 AND g.archived_at IS NULL`, familyID, t.ID, t.ChildID, t.DueDate, t.Title, t.Points, t.RoutineGroupID, t.SortOrder)
 	if err == nil {
 		err = finish(ctx, tx, familyID, sessionID, "tasks.create", key, t, 201)
 	}
@@ -676,7 +691,7 @@ func (s *Service) UpdateTaskConditional(ctx context.Context, sessionID, userID, 
 		return t, true, err
 	}
 	var t Task
-	err = tx.QueryRow(ctx, `SELECT t.id,t.child_id,t.title,coalesce(t.description,''),t.due_date,t.points,t.state::text,t.created_at,t.updated_at,t.version FROM one_off_tasks t JOIN occurrences o ON o.task_id=t.id WHERE t.id=$1 AND t.family_id=$2 AND t.state='active' AND o.state='not_started' AND NOT EXISTS(SELECT 1 FROM completion_attempts WHERE occurrence_id=o.id) FOR UPDATE OF t,o`, id, familyID).Scan(&t.ID, &t.ChildID, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
+	err = tx.QueryRow(ctx, `SELECT t.id,t.child_id,t.routine_group_id,t.sort_order,t.title,coalesce(t.description,''),t.due_date,t.points,t.state::text,t.created_at,t.updated_at,t.version FROM one_off_tasks t JOIN occurrences o ON o.task_id=t.id WHERE t.id=$1 AND t.family_id=$2 AND t.state='active' AND o.state='not_started' AND NOT EXISTS(SELECT 1 FROM completion_attempts WHERE occurrence_id=o.id) FOR UPDATE OF t,o`, id, familyID).Scan(&t.ID, &t.ChildID, &t.RoutineGroupID, &t.SortOrder, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM one_off_tasks WHERE id=$1 AND family_id=$2)`, id, familyID).Scan(&exists)
@@ -703,9 +718,12 @@ func (s *Service) UpdateTaskConditional(ctx context.Context, sessionID, userID, 
 	if in.Points == 0 {
 		in.Points = t.Points
 	}
-	err = tx.QueryRow(ctx, `UPDATE one_off_tasks SET title=$3,description=nullif($4,''),due_date=$5,points=$6,updated_at=now(),version=version+1 WHERE id=$1 AND family_id=$2 RETURNING id,child_id,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version`, id, familyID, in.Title, in.Description, in.DueDate, in.Points).Scan(&t.ID, &t.ChildID, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
+	if !in.RoutineGroupSet {
+		in.RoutineGroupID = t.RoutineGroupID
+	}
+	err = tx.QueryRow(ctx, `UPDATE one_off_tasks SET title=$3,description=nullif($4,''),due_date=$5,points=$6,routine_group_id=$7,sort_order=$8,updated_at=now(),version=version+1 WHERE id=$1 AND family_id=$2 RETURNING id,child_id,routine_group_id,sort_order,title,coalesce(description,''),due_date,points,state::text,created_at,updated_at,version`, id, familyID, in.Title, in.Description, in.DueDate, in.Points, in.RoutineGroupID, in.SortOrder).Scan(&t.ID, &t.ChildID, &t.RoutineGroupID, &t.SortOrder, &t.Title, &t.Description, &t.DueDate, &t.Points, &t.Status, &t.CreatedAt, &t.UpdatedAt, &t.Version)
 	if err == nil {
-		_, err = tx.Exec(ctx, `UPDATE occurrences SET local_date=$2,due_date=$2,title_snapshot=$3,points_snapshot=$4,updated_at=now(),version=version+1 WHERE task_id=$1`, id, in.DueDate, in.Title, in.Points)
+		_, err = tx.Exec(ctx, `UPDATE occurrences o SET local_date=$2,due_date=$2,title_snapshot=$3,points_snapshot=$4,routine_group_id_snapshot=g.id,routine_group_name_snapshot=g.name,routine_group_icon_snapshot=g.icon,routine_group_color_snapshot=g.color,routine_group_sort_order_snapshot=g.sort_order,item_sort_order_snapshot=$6,updated_at=now(),version=o.version+1 FROM (SELECT $5::uuid AS group_id) x LEFT JOIN routine_groups g ON g.id=x.group_id WHERE o.task_id=$1`, id, in.DueDate, in.Title, in.Points, in.RoutineGroupID, in.SortOrder)
 	}
 	if err == nil {
 		_, err = tx.Exec(ctx, `INSERT INTO audit_events(family_id,actor_user_id,session_id,action,subject_type,subject_id,before_status,after_status,idempotency_key) VALUES($1,$2,$3,'task.updated','task',$4,'active','active',nullif($5,''))`, familyID, userID, sessionID, id, key)
@@ -840,7 +858,7 @@ func (s *Service) ensureDate(ctx context.Context, familyID, childID string, date
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO occurrences(family_id,assignment_id,child_id,local_date,title_snapshot,description_snapshot,icon_snapshot,color_snapshot,points_snapshot,source_type,item_type_snapshot) SELECT a.family_id,a.id,a.child_id,$3,v.title,coalesce(v.description,''),coalesce(v.icon,''),coalesce(v.color,''),a.points,'habit','habit' FROM habit_assignments a JOIN children c ON c.id=a.child_id AND c.family_id=a.family_id JOIN habits h ON h.id=a.habit_id AND h.family_id=a.family_id JOIN habit_schedules sc ON sc.assignment_id=a.id JOIN habit_versions v ON v.habit_id=h.id AND v.effective_from<=$3 AND (v.effective_until IS NULL OR v.effective_until>=$3) WHERE a.family_id=$1 AND ($2='' OR a.child_id::text=$2) AND c.archived_at IS NULL AND a.effective_from<=$3 AND (a.effective_until IS NULL OR a.effective_until>=$3) AND (h.inactive_from IS NULL OR h.inactive_from>$3) AND (sc.kind='daily' OR (sc.kind='weekdays' AND extract(dow from $3::date)::smallint=ANY(sc.weekdays))) ON CONFLICT (assignment_id,child_id,local_date) DO NOTHING`, familyID, childID, date)
+	_, err = tx.Exec(ctx, `INSERT INTO occurrences(family_id,assignment_id,child_id,local_date,title_snapshot,description_snapshot,icon_snapshot,color_snapshot,points_snapshot,source_type,item_type_snapshot,routine_group_id_snapshot,routine_group_name_snapshot,routine_group_icon_snapshot,routine_group_color_snapshot,routine_group_sort_order_snapshot,item_sort_order_snapshot) SELECT a.family_id,a.id,a.child_id,$3,v.title,coalesce(v.description,''),coalesce(v.icon,''),coalesce(v.color,''),a.points,'habit','habit',g.id,g.name,g.icon,g.color,g.sort_order,a.sort_order FROM habit_assignments a JOIN children c ON c.id=a.child_id AND c.family_id=a.family_id JOIN habits h ON h.id=a.habit_id AND h.family_id=a.family_id JOIN habit_schedules sc ON sc.assignment_id=a.id JOIN habit_versions v ON v.habit_id=h.id AND v.effective_from<=$3 AND (v.effective_until IS NULL OR v.effective_until>=$3) LEFT JOIN routine_groups g ON g.id=a.routine_group_id AND g.family_id=a.family_id WHERE a.family_id=$1 AND ($2='' OR a.child_id::text=$2) AND c.archived_at IS NULL AND a.effective_from<=$3 AND (a.effective_until IS NULL OR a.effective_until>=$3) AND (h.inactive_from IS NULL OR h.inactive_from>$3) AND (sc.kind='daily' OR (sc.kind='weekdays' AND extract(dow from $3::date)::smallint=ANY(sc.weekdays))) ON CONFLICT (assignment_id,child_id,local_date) DO NOTHING`, familyID, childID, date)
 	if err != nil {
 		return err
 	}

@@ -91,6 +91,22 @@ func TestParentChildParentJourneyIntegration(t *testing.T) {
 	session := auth.Session{ID: "", UserID: sessionData["userId"].(string), FamilyID: sessionData["householdId"].(string)}
 	cleanupCompletionHTTP(t, pool, session)
 
+	household := request(http.MethodGet, "/api/v1/household", "", "", "")
+	mustStatus(household, http.StatusOK)
+	householdVersion := int(decodeData(household).(map[string]any)["version"].(float64))
+	toggleKey := "journey-rewards-enable-" + suffix
+	enabled := request(http.MethodPatch, "/api/v1/household", `{"rewardsEnabled":true}`, toggleKey, strconv.Itoa(householdVersion))
+	mustStatus(enabled, http.StatusOK)
+	enabledBody := enabled.Body.String()
+	enabledVersion := int(decodeData(enabled).(map[string]any)["version"].(float64))
+	disabled := request(http.MethodPatch, "/api/v1/household", `{"rewardsEnabled":false}`, "journey-rewards-disable-"+suffix, strconv.Itoa(enabledVersion))
+	mustStatus(disabled, http.StatusOK)
+	replayedToggle := request(http.MethodPatch, "/api/v1/household", `{"rewardsEnabled":true}`, toggleKey, strconv.Itoa(householdVersion))
+	mustStatus(replayedToggle, http.StatusOK)
+	if replayedToggle.Header().Get("Idempotent-Replayed") != "true" || replayedToggle.Body.String() != enabledBody {
+		t.Fatalf("household toggle replay changed: first=%s replay=%s", enabledBody, replayedToggle.Body.String())
+	}
+
 	childResponse := request(http.MethodPost, "/api/v1/children", `{"nickname":"Maya","avatar":"fox","color":"#336699"}`, "journey-child-"+suffix, "")
 	mustStatus(childResponse, http.StatusCreated)
 	childID := decodeData(childResponse).(map[string]any)["id"].(string)
@@ -138,12 +154,18 @@ func TestParentChildParentJourneyIntegration(t *testing.T) {
 	if len(decodeData(queue).([]any)) != 1 {
 		t.Fatalf("pending queue body=%s", queue.Body.String())
 	}
+	overviewPending := request(http.MethodGet, "/api/v1/parent/overview", "", "", "")
+	mustStatus(overviewPending, http.StatusOK)
+	pendingChildOverview := decodeData(overviewPending).(map[string]any)["children"].([]any)[0].(map[string]any)
+	if pendingChildOverview["waitingPointsToday"].(float64) != 7 || pendingChildOverview["approvedPointsToday"].(float64) != 0 {
+		t.Fatalf("overview pending points=%s", overviewPending.Body.String())
+	}
 	approved := request(http.MethodPost, "/api/v1/completions/"+completionID+"/approve", "", "journey-approve-"+suffix, versionString(version))
 	mustStatus(approved, http.StatusOK)
 	overviewAfter := request(http.MethodGet, "/api/v1/parent/overview", "", "", "")
 	mustStatus(overviewAfter, http.StatusOK)
 	childOverview := decodeData(overviewAfter).(map[string]any)["children"].([]any)[0].(map[string]any)
-	if childOverview["completed"].(float64) != 1 || childOverview["total"].(float64) != 1 || childOverview["pending"].(float64) != 0 {
+	if childOverview["completed"].(float64) != 1 || childOverview["total"].(float64) != 1 || childOverview["pending"].(float64) != 0 || childOverview["approvedPointsToday"].(float64) != 7 || childOverview["waitingPointsToday"].(float64) != 0 {
 		t.Fatalf("overview after approval=%s", overviewAfter.Body.String())
 	}
 	balance := request(http.MethodGet, "/api/v1/children/"+childID+"/points", "", "", "")

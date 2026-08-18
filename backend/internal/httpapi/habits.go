@@ -48,14 +48,20 @@ type assignmentBody struct {
 	Schedule           scheduleBody `json:"schedule"`
 	EffectiveStartDate string       `json:"effectiveStartDate"`
 	EffectiveDate      string       `json:"effectiveDate"`
+	RoutineGroupID     *string      `json:"routineGroupId"`
+	SortOrder          int32        `json:"sortOrder"`
+	routineGroupSet    bool
 }
 type taskBody struct {
-	ChildID        string `json:"childId"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	DueDate        string `json:"dueDate"`
-	Points         int32  `json:"points"`
-	descriptionSet bool
+	ChildID         string  `json:"childId"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+	DueDate         string  `json:"dueDate"`
+	Points          int32   `json:"points"`
+	RoutineGroupID  *string `json:"routineGroupId"`
+	SortOrder       int32   `json:"sortOrder"`
+	descriptionSet  bool
+	routineGroupSet bool
 }
 type reasonBody struct {
 	Reason string `json:"reason"`
@@ -90,6 +96,22 @@ func (b *taskBody) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	_, b.descriptionSet = fields["description"]
+	_, b.routineGroupSet = fields["routineGroupId"]
+	return nil
+}
+
+func (b *assignmentBody) UnmarshalJSON(data []byte) error {
+	type plain assignmentBody
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*b = assignmentBody(v)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	_, b.routineGroupSet = fields["routineGroupId"]
 	return nil
 }
 
@@ -119,15 +141,15 @@ func habitIssues(in habitBody, patch bool) []validationIssue {
 }
 func idem(r *http.Request) (string, []validationIssue) {
 	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if k == "" || len(k) > 128 {
-		return "", []validationIssue{{"Idempotency-Key", "required", "Provide an Idempotency-Key header of at most 128 characters."}}
+	if len(k) < 8 || len(k) > 128 {
+		return "", []validationIssue{{"Idempotency-Key", "required", "Provide an Idempotency-Key header of 8–128 characters."}}
 	}
 	return k, nil
 }
 func optionalIdem(r *http.Request) (string, []validationIssue) {
 	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(k) > 128 {
-		return "", []validationIssue{{"Idempotency-Key", "length", "Idempotency-Key must be at most 128 characters."}}
+	if k != "" && (len(k) < 8 || len(k) > 128) {
+		return "", []validationIssue{{"Idempotency-Key", "length", "Idempotency-Key must be 8–128 characters."}}
 	}
 	return k, nil
 }
@@ -283,7 +305,13 @@ func assignmentInput(in assignmentBody, update bool) (habits.AssignmentInput, []
 	}
 	date, di := parseDate(ds, "effectiveDate")
 	issues = append(issues, di...)
-	return habits.AssignmentInput{ChildID: in.ChildID, Points: in.Points, Kind: in.Schedule.Kind, Weekdays: days, EffectiveDate: date}, issues
+	if in.RoutineGroupID != nil && !uuidPattern.MatchString(*in.RoutineGroupID) {
+		issues = append(issues, validationIssue{"routineGroupId", "invalid", "Choose a valid routine group."})
+	}
+	if in.SortOrder < 0 {
+		issues = append(issues, validationIssue{"sortOrder", "range", "Sort order must not be negative."})
+	}
+	return habits.AssignmentInput{ChildID: in.ChildID, RoutineGroupID: in.RoutineGroupID, RoutineGroupSet: in.routineGroupSet, SortOrder: in.SortOrder, Points: in.Points, Kind: in.Schedule.Kind, Weekdays: days, EffectiveDate: date}, issues
 }
 func (a *authAPI) createAssignment(w http.ResponseWriter, r *http.Request) {
 	var in assignmentBody
@@ -405,6 +433,12 @@ func taskIssues(in taskBody, patch bool) []validationIssue {
 		_, di := parseDate(in.DueDate, "dueDate")
 		out = append(out, di...)
 	}
+	if in.RoutineGroupID != nil && !uuidPattern.MatchString(*in.RoutineGroupID) {
+		out = append(out, validationIssue{"routineGroupId", "invalid", "Choose a valid routine group."})
+	}
+	if in.SortOrder < 0 {
+		out = append(out, validationIssue{"sortOrder", "range", "Sort order must not be negative."})
+	}
 	return out
 }
 func (a *authAPI) listTasks(w http.ResponseWriter, r *http.Request) {
@@ -442,7 +476,7 @@ func (a *authAPI) createTask(w http.ResponseWriter, r *http.Request) {
 	}
 	date, _ := time.Parse("2006-01-02", in.DueDate)
 	s := sessionFrom(r.Context())
-	t, replay, err := a.habits.CreateTask(r.Context(), s.ID, s.UserID, s.FamilyID, key, hashBody(in), habits.TaskInput{ChildID: in.ChildID, Title: strings.TrimSpace(in.Title), Description: in.Description, DueDate: date, Points: in.Points})
+	t, replay, err := a.habits.CreateTask(r.Context(), s.ID, s.UserID, s.FamilyID, key, hashBody(in), habits.TaskInput{ChildID: in.ChildID, RoutineGroupID: in.RoutineGroupID, RoutineGroupSet: in.routineGroupSet, SortOrder: in.SortOrder, Title: strings.TrimSpace(in.Title), Description: in.Description, DueDate: date, Points: in.Points})
 	if handleHabitError(w, err) {
 		return
 	}
@@ -472,7 +506,7 @@ func (a *authAPI) updateTask(w http.ResponseWriter, r *http.Request) {
 	s := sessionFrom(r.Context())
 	id := r.PathValue("taskId")
 	requestHash := hashBody(map[string]any{"id": id, "body": in, "descriptionSet": in.descriptionSet})
-	t, replay, err := a.habits.UpdateTaskConditional(r.Context(), s.ID, s.UserID, s.FamilyID, id, key, requestHash, expected, habits.TaskInput{Title: strings.TrimSpace(in.Title), Description: in.Description, DueDate: date, Points: in.Points, DescriptionSet: in.descriptionSet})
+	t, replay, err := a.habits.UpdateTaskConditional(r.Context(), s.ID, s.UserID, s.FamilyID, id, key, requestHash, expected, habits.TaskInput{RoutineGroupID: in.RoutineGroupID, RoutineGroupSet: in.routineGroupSet, SortOrder: in.SortOrder, Title: strings.TrimSpace(in.Title), Description: in.Description, DueDate: date, Points: in.Points, DescriptionSet: in.descriptionSet})
 	if handleHabitError(w, err) {
 		return
 	}
@@ -536,10 +570,10 @@ func assignmentJSON(a habits.Assignment) map[string]any {
 	if a.Schedule.Kind == "weekdays" {
 		schedule["weekdays"] = days
 	}
-	return map[string]any{"id": a.ID, "habitId": a.HabitID, "childId": a.ChildID, "points": a.Points, "schedule": schedule, "effectiveStartDate": a.EffectiveStartDate.Format("2006-01-02"), "active": a.Active, "version": a.Version}
+	return map[string]any{"id": a.ID, "habitId": a.HabitID, "childId": a.ChildID, "routineGroupId": a.RoutineGroupID, "sortOrder": a.SortOrder, "points": a.Points, "schedule": schedule, "effectiveStartDate": a.EffectiveStartDate.Format("2006-01-02"), "active": a.Active, "version": a.Version}
 }
 func taskJSON(t habits.Task) map[string]any {
-	return map[string]any{"id": t.ID, "childId": t.ChildID, "title": t.Title, "description": t.Description, "dueDate": t.DueDate.Format("2006-01-02"), "points": t.Points, "status": t.Status, "version": t.Version, "createdAt": t.CreatedAt.UTC(), "updatedAt": t.UpdatedAt.UTC()}
+	return map[string]any{"id": t.ID, "childId": t.ChildID, "routineGroupId": t.RoutineGroupID, "sortOrder": t.SortOrder, "title": t.Title, "description": t.Description, "dueDate": t.DueDate.Format("2006-01-02"), "points": t.Points, "status": t.Status, "version": t.Version, "createdAt": t.CreatedAt.UTC(), "updatedAt": t.UpdatedAt.UTC()}
 }
 func handleHabitError(w http.ResponseWriter, err error) bool {
 	if err == nil {

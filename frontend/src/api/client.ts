@@ -30,12 +30,18 @@ export type Household = {
   timezone: string;
   weekStartsOn: 'sunday' | 'monday';
   parentModeTimeoutMinutes: 5 | 15 | 30;
+  rewardsEnabled?: boolean;
+  version: number;
 };
 
 export type HouseholdUpdate = Partial<
   Pick<
     Household,
-    'name' | 'timezone' | 'weekStartsOn' | 'parentModeTimeoutMinutes'
+    | 'name'
+    | 'timezone'
+    | 'weekStartsOn'
+    | 'parentModeTimeoutMinutes'
+    | 'rewardsEnabled'
   >
 > & { parentPin?: string | null };
 
@@ -51,6 +57,8 @@ export type ParentOverview = {
     completed: number;
     total: number;
     pending: number;
+    approvedPointsToday: number;
+    waitingPointsToday: number;
   }>;
 };
 
@@ -145,11 +153,23 @@ export const householdApi = {
   async get() {
     return (await request<{ data: Household }>('/household')).data;
   },
-  async update(input: HouseholdUpdate) {
+  async update(
+    input: HouseholdUpdate,
+    options?: { version: number; idempotencyKey: string },
+  ) {
     return (
       await request<{ data: Household }>(
         '/household',
-        { method: 'PATCH', body: JSON.stringify(input) },
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+          headers: options
+            ? {
+                'If-Match': String(options.version),
+                'Idempotency-Key': options.idempotencyKey,
+              }
+            : undefined,
+        },
         { csrf: true },
       )
     ).data;
@@ -269,6 +289,8 @@ export type Assignment = {
   effectiveStartDate: string;
   active: boolean;
   version?: number;
+  routineGroupId?: string | null;
+  sortOrder?: number;
 };
 
 export type Habit = {
@@ -290,7 +312,7 @@ export type HabitInput = Pick<Habit, 'title'> &
 export type AssignmentInput = Pick<
   Assignment,
   'points' | 'schedule' | 'effectiveStartDate'
-> & { childIds: string[] };
+> & { childIds: string[]; routineGroupId?: string | null; sortOrder?: number };
 
 export type OneOffTask = {
   id: string;
@@ -302,13 +324,15 @@ export type OneOffTask = {
   status: 'active' | 'cancelled';
   createdAt: string;
   version?: number;
+  routineGroupId?: string | null;
+  sortOrder?: number;
 };
 
 export type TaskInput = Pick<
   OneOffTask,
   'childId' | 'title' | 'dueDate' | 'points'
 > &
-  Partial<Pick<OneOffTask, 'description'>>;
+  Partial<Pick<OneOffTask, 'description' | 'routineGroupId' | 'sortOrder'>>;
 
 type HabitResponse = { data: Habit };
 type HabitsResponse = { data: Habit[]; page: { nextCursor?: string | null } };
@@ -386,7 +410,11 @@ export const habitsApi = {
   },
   async updateAssignment(
     id: string,
-    input: Pick<Assignment, 'points' | 'schedule'> & { effectiveDate: string },
+    input: Pick<Assignment, 'points' | 'schedule'> & {
+      effectiveDate: string;
+      routineGroupId?: string | null;
+      sortOrder?: number;
+    },
     version?: number,
   ) {
     return (
@@ -500,6 +528,11 @@ export type Occurrence = {
   dueState: 'scheduled_today' | 'overdue' | 'historical';
   completionId?: string | null;
   availableActions: Array<'submit' | 'withdraw'>;
+  routineGroup?: Pick<
+    RoutineGroup,
+    'id' | 'name' | 'icon' | 'color' | 'sortOrder'
+  > | null;
+  itemSortOrder?: number;
 };
 
 export type Today = {
@@ -587,7 +620,12 @@ export type ReviewItem = Completion & {
 export type LedgerEntry = {
   id: string;
   childId: string;
-  kind: 'award' | 'approval_reversal' | 'manual_correction';
+  kind:
+    | 'award'
+    | 'approval_reversal'
+    | 'manual_correction'
+    | 'reward_redemption'
+    | 'reward_refund';
   amount: number;
   reason: string;
   occurrenceId?: string | null;
@@ -642,6 +680,8 @@ export type ChildReport = {
   cancelled: number;
   pointsEarned: number;
   manualCorrections: number;
+  pointsRedeemed?: number;
+  pointsRefunded?: number;
   netPointsChange: number;
   weekStartsOn: 0 | 1;
 };
@@ -775,6 +815,356 @@ export const reportsApi = {
     return (
       await request<{ data: ChildReport }>(
         `/reports/children/${childId}?${query.toString()}`,
+      )
+    ).data;
+  },
+};
+
+export type RoutineGroup = {
+  id: string;
+  name: string;
+  icon?: string;
+  color: string;
+  startsAtLocal?: string | null;
+  endsAtLocal?: string | null;
+  sortOrder: number;
+  archivedAt?: string | null;
+  version: number;
+};
+
+export type RoutineGroupInput = Pick<RoutineGroup, 'name' | 'color'> &
+  Partial<
+    Pick<RoutineGroup, 'icon' | 'startsAtLocal' | 'endsAtLocal' | 'sortOrder'>
+  >;
+
+export const routineGroupsApi = {
+  async list() {
+    return (await request<ApiPage<RoutineGroup>>('/routine-groups')).data;
+  },
+  async create(input: RoutineGroupInput, idempotencyKey = crypto.randomUUID()) {
+    return (
+      await request<{ data: RoutineGroup }>(
+        '/routine-groups',
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+          headers: { 'Idempotency-Key': idempotencyKey },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async update(id: string, input: RoutineGroupInput, version: number) {
+    return (
+      await request<{ data: RoutineGroup }>(
+        `/routine-groups/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+          headers: {
+            'Idempotency-Key': crypto.randomUUID(),
+            'If-Match': String(version),
+          },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async archive(
+    id: string,
+    version: number,
+    input: { effectiveFrom: string; moveToRoutineGroupId: string | null },
+  ) {
+    await request<void>(
+      `/routine-groups/${id}/archive`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: {
+          'Idempotency-Key': crypto.randomUUID(),
+          'If-Match': String(version),
+        },
+      },
+      { csrf: true },
+    );
+  },
+  async reorder(groups: RoutineGroup[]) {
+    return request<void>(
+      '/routine-groups/order',
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          orderedIds: groups.map(({ id }) => id),
+          items: groups.map(({ id, version }) => ({ id, version })),
+        }),
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      },
+      { csrf: true },
+    );
+  },
+};
+
+export type Reward = {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  costPoints: number;
+  eligibleChildIds: string[];
+  availabilityScope: 'all_active_children' | 'selected_children';
+  active: boolean;
+  canRedeem?: boolean;
+  shortfallPoints?: number;
+  version: number;
+};
+
+export type RewardInput = Pick<Reward, 'title' | 'costPoints'> &
+  Partial<Pick<Reward, 'description' | 'icon' | 'eligibleChildIds'>> & {
+    availabilityScope: Reward['availabilityScope'];
+  };
+
+export type ChildReward = Pick<
+  Reward,
+  'id' | 'title' | 'description' | 'icon' | 'costPoints' | 'version'
+> & {
+  canRedeem: boolean;
+  shortfallPoints?: number;
+};
+
+export type RewardRedemption = {
+  id: string;
+  childId: string;
+  rewardId: string;
+  rewardTitle: string;
+  costPoints: number;
+  state: 'requested' | 'fulfilled' | 'cancelled';
+  requestedAt: string;
+  decidedAt?: string | null;
+  cancellationReason?: string | null;
+  version: number;
+};
+
+export type RewardEligibilityPolicy = {
+  enabled: boolean;
+  period: 'daily' | 'weekly' | 'monthly';
+  minimumPoints: number;
+  minimumCompletionPercentage: number | null;
+  maximumRedemptions: number | null;
+  graceHours: 0 | 12 | 24 | 48;
+  effectiveFrom: string | null;
+  version: number;
+};
+
+export type RewardEligibilityRuleResult = {
+  type: 'minimum_points' | 'minimum_completion_percentage';
+  target: number;
+  actual: number;
+  passed: boolean;
+};
+
+export type RewardEligibilityStatus =
+  'collecting' | 'awaiting_evaluation' | 'eligible' | 'not_eligible';
+
+export type RewardEligibilityProgress = {
+  childId: string;
+  childName: string;
+  policyEnabled: boolean;
+  collectionPeriodStart: string;
+  collectionPeriodEnd: string;
+  evaluationAt: string | null;
+  pointsCollected: number;
+  completionPercentage: number | null;
+  assignedCount: number;
+  approvedCount: number;
+  status: RewardEligibilityStatus;
+  eligibleFrom: string | null;
+  eligibleUntil: string | null;
+  redemptionsUsed: number;
+  maximumRedemptions: number | null;
+  rules: RewardEligibilityRuleResult[];
+};
+
+export type RewardEligibilityEvaluation = RewardEligibilityProgress & {
+  id: string;
+  evaluatedAt: string;
+};
+
+export type ChildRewardEligibility = {
+  policyEnabled: boolean;
+  status: RewardEligibilityStatus;
+  collectionPeriodStart: string | null;
+  collectionPeriodEnd: string | null;
+  pointsCollected: number;
+  minimumPoints: number;
+  completionPercentage: number | null;
+  minimumCompletionPercentage: number | null;
+  eligibleFrom: string | null;
+  eligibleUntil: string | null;
+  redemptionsUsed: number;
+  maximumRedemptions: number | null;
+  canRedeem: boolean;
+  unavailableReason: string | null;
+  pointsShortfall: number;
+};
+
+export const rewardsApi = {
+  async list() {
+    return (await request<ApiPage<Reward>>('/rewards')).data;
+  },
+  async create(input: RewardInput, idempotencyKey = crypto.randomUUID()) {
+    return (
+      await request<{ data: Reward }>(
+        '/rewards',
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+          headers: { 'Idempotency-Key': idempotencyKey },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async update(id: string, input: RewardInput, version: number) {
+    return (
+      await request<{ data: Reward }>(
+        `/rewards/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+          headers: {
+            'Idempotency-Key': crypto.randomUUID(),
+            'If-Match': String(version),
+          },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async archive(id: string, version: number) {
+    await request<void>(
+      `/rewards/${id}/archive`,
+      {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': crypto.randomUUID(),
+          'If-Match': String(version),
+        },
+      },
+      { csrf: true },
+    );
+  },
+  async childCatalog() {
+    return request<{
+      data: ChildReward[];
+      balance: number;
+      eligibility?: ChildRewardEligibility;
+    }>('/child/rewards');
+  },
+  async redeem(
+    id: string,
+    rewardVersion: number,
+    confirmedCostPoints: number,
+    idempotencyKey: string,
+  ) {
+    return (
+      await request<{ data: RewardRedemption }>(
+        `/child/rewards/${id}/redemptions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            rewardVersion,
+            confirmedCostPoints,
+          }),
+          headers: { 'Idempotency-Key': idempotencyKey },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async childRedemptions() {
+    return (
+      await request<ApiPage<RewardRedemption>>('/child/reward-redemptions')
+    ).data;
+  },
+  async redemptions(status?: RewardRedemption['state']) {
+    const query = status ? `?state=${status}` : '';
+    return (
+      await request<ApiPage<RewardRedemption>>(`/reward-redemptions${query}`)
+    ).data;
+  },
+  async fulfill(item: RewardRedemption) {
+    return (
+      await request<{ data: RewardRedemption }>(
+        `/reward-redemptions/${item.id}/fulfill`,
+        {
+          method: 'POST',
+          headers: {
+            'Idempotency-Key': crypto.randomUUID(),
+            'If-Match': String(item.version),
+          },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async cancel(item: RewardRedemption, reason: string) {
+    return (
+      await request<{ data: RewardRedemption }>(
+        `/reward-redemptions/${item.id}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+          headers: {
+            'Idempotency-Key': crypto.randomUUID(),
+            'If-Match': String(item.version),
+          },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+};
+
+export const rewardEligibilityApi = {
+  async policy() {
+    return (
+      await request<{ data: RewardEligibilityPolicy }>(
+        '/reward-eligibility-policy',
+      )
+    ).data;
+  },
+  async updatePolicy(
+    input: Omit<RewardEligibilityPolicy, 'version' | 'effectiveFrom'>,
+    version: number,
+    idempotencyKey: string,
+  ) {
+    return (
+      await request<{ data: RewardEligibilityPolicy }>(
+        '/reward-eligibility-policy',
+        {
+          method: 'PUT',
+          body: JSON.stringify(input),
+          headers: {
+            'Idempotency-Key': idempotencyKey,
+            'If-Match': String(version),
+          },
+        },
+        { csrf: true },
+      )
+    ).data;
+  },
+  async progress() {
+    return (
+      await request<{ data: RewardEligibilityProgress[] }>(
+        '/reward-eligibility-progress',
+      )
+    ).data;
+  },
+  async evaluations(childId?: string) {
+    const query = childId ? `?childId=${encodeURIComponent(childId)}` : '';
+    return (
+      await request<ApiPage<RewardEligibilityEvaluation>>(
+        `/reward-eligibility-evaluations${query}`,
       )
     ).data;
   },

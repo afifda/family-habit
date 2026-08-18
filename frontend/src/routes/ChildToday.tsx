@@ -12,21 +12,6 @@ import { useAuth } from '../auth/AuthProvider';
 
 type Group = 'todo' | 'waiting' | 'done';
 
-const groupDetails: Record<Group, { title: string; empty: string }> = {
-  todo: {
-    title: 'To do',
-    empty: 'Nothing left to do right now.',
-  },
-  waiting: {
-    title: 'Waiting for parent',
-    empty: 'Nothing is waiting for a parent.',
-  },
-  done: {
-    title: 'Done',
-    empty: 'Completed items will appear here.',
-  },
-};
-
 function groupFor(item: Occurrence): Group | null {
   if (item.group === 'to_do') return 'todo';
   if (item.group === 'waiting_for_parent') return 'waiting';
@@ -88,6 +73,9 @@ export function ChildToday() {
   );
   const [announcement, setAnnouncement] = useState('');
   const [actionError, setActionError] = useState('');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'todo' | 'waiting' | 'done'
+  >('all');
   const keys = useRef(new Map<string, string>());
   const detailFocusDestination = useRef<Group | null>(null);
 
@@ -158,7 +146,9 @@ export function ChildToday() {
       if (selected?.id === item.id) detailFocusDestination.current = 'waiting';
       if (!selected) {
         requestAnimationFrame(() =>
-          document.getElementById('group-waiting')?.focus(),
+          document
+            .getElementById(`routine-${item.routineGroup?.id ?? 'other'}`)
+            ?.focus(),
         );
       }
       void queryClient.invalidateQueries({ queryKey });
@@ -223,7 +213,9 @@ export function ChildToday() {
       if (selected?.id === item.id) detailFocusDestination.current = 'todo';
       if (!selected) {
         requestAnimationFrame(() =>
-          document.getElementById('group-todo')?.focus(),
+          document
+            .getElementById(`routine-${item.routineGroup?.id ?? 'other'}`)
+            ?.focus(),
         );
       }
       void queryClient.invalidateQueries({ queryKey });
@@ -248,8 +240,9 @@ export function ChildToday() {
   }
 
   const closeDetail = useCallback(() => {
-    const destinationGroup =
-      detailFocusDestination.current ?? (selected ? groupFor(selected) : null);
+    const destinationRoutine = selected
+      ? `routine-${selected.routineGroup?.id ?? 'other'}`
+      : null;
     const movedBetweenGroups = detailFocusDestination.current !== null;
     setSelected(null);
     requestAnimationFrame(() => {
@@ -257,8 +250,8 @@ export function ChildToday() {
         detailTrigger.focus();
         return;
       }
-      if (destinationGroup) {
-        document.getElementById(`group-${destinationGroup}`)?.focus();
+      if (destinationRoutine) {
+        document.getElementById(destinationRoutine)?.focus();
       }
       detailFocusDestination.current = null;
     });
@@ -276,6 +269,36 @@ export function ChildToday() {
     }
     return result;
   }, [today.data]);
+
+  const routineSections = useMemo(() => {
+    const sections = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        icon?: string;
+        color?: string;
+        items: Occurrence[];
+      }
+    >();
+    for (const item of today.data?.occurrences ?? []) {
+      const workflow = groupFor(item);
+      if (statusFilter !== 'all' && workflow !== statusFilter) continue;
+      const routine = item.routineGroup;
+      const id = routine?.id ?? 'other';
+      const existing = sections.get(id);
+      if (existing) existing.items.push(item);
+      else
+        sections.set(id, {
+          id,
+          name: routine?.name ?? 'Other',
+          icon: routine?.icon,
+          color: routine?.color,
+          items: [item],
+        });
+    }
+    return [...sections.values()];
+  }, [statusFilter, today.data]);
 
   if (today.isPending) return <TodayLoading />;
 
@@ -338,6 +361,32 @@ export function ChildToday() {
         </div>
       )}
 
+      <fieldset className="status-filters">
+        <legend className="visually-hidden">Filter activities by status</legend>
+        {(
+          [
+            ['all', 'All'],
+            ['todo', 'To do'],
+            ['waiting', 'Waiting'],
+            ['done', 'Done'],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value}>
+            <input
+              type="radio"
+              name="today-status"
+              value={value}
+              checked={statusFilter === value}
+              onChange={() => setStatusFilter(value)}
+            />
+            {label} ·{' '}
+            {value === 'all'
+              ? total
+              : groups[value === 'waiting' ? 'waiting' : value].length}
+          </label>
+        ))}
+      </fieldset>
+
       {total === 0 ? (
         <div className="today-state">
           <span className="today-state-icon" aria-hidden="true">
@@ -346,12 +395,21 @@ export function ChildToday() {
           <h2>You’re all caught up</h2>
           <p>There are no habits or tasks for you today.</p>
         </div>
+      ) : routineSections.length === 0 ? (
+        <div className="today-state">
+          <h2>No activities match this filter</h2>
+          <button
+            className="button button-secondary"
+            onClick={() => setStatusFilter('all')}
+          >
+            Show all
+          </button>
+        </div>
       ) : (
-        (['todo', 'waiting', 'done'] as Group[]).map((group) => (
-          <TodayGroup
-            key={group}
-            group={group}
-            items={groups[group]}
+        routineSections.map((routine) => (
+          <TodayRoutine
+            key={routine.id}
+            routine={routine}
             submittingId={submit.isPending ? submit.variables.id : undefined}
             withdrawingId={
               withdraw.isPending ? withdraw.variables.id : undefined
@@ -404,94 +462,101 @@ function TodayLoading() {
   );
 }
 
-function TodayGroup({
-  group,
-  items,
+function TodayRoutine({
+  routine,
   submittingId,
   withdrawingId,
   onSelect,
   onSubmit,
   onWithdraw,
 }: {
-  group: Group;
-  items: Occurrence[];
+  routine: {
+    id: string;
+    name: string;
+    icon?: string;
+    color?: string;
+    items: Occurrence[];
+  };
   submittingId?: string;
   withdrawingId?: string;
   onSelect: (item: Occurrence, trigger: HTMLButtonElement) => void;
   onSubmit: (item: Occurrence) => void;
   onWithdraw: (item: Occurrence) => void;
 }) {
-  const details = groupDetails[group];
+  const { items } = routine;
   return (
     <section
-      className={`today-group today-group-${group}`}
-      aria-labelledby={`group-${group}`}
+      className="today-group routine-section"
+      aria-labelledby={`routine-${routine.id}`}
     >
-      <h2 id={`group-${group}`} tabIndex={-1}>
-        {details.title} <span>· {items.length}</span>
+      <h2 id={`routine-${routine.id}`} tabIndex={-1}>
+        <span
+          className="routine-heading-icon"
+          style={routine.color ? { backgroundColor: routine.color } : undefined}
+          aria-hidden="true"
+        >
+          {routine.icon || '•'}
+        </span>{' '}
+        {routine.name} <span>· {items.length}</span>
       </h2>
-      {items.length === 0 ? (
-        <p className="today-group-empty">{details.empty}</p>
-      ) : (
-        <ul className="today-list">
-          {items.map((item) => (
-            <li key={item.id}>
-              <article className="today-item">
-                <button
-                  className="today-item-detail"
-                  type="button"
-                  onClick={(event) => onSelect(item, event.currentTarget)}
-                  aria-label={`View details for ${item.title}`}
+      <ul className="today-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <article className="today-item">
+              <button
+                className="today-item-detail"
+                type="button"
+                onClick={(event) => onSelect(item, event.currentTarget)}
+                aria-label={`View details for ${item.title}`}
+              >
+                <span
+                  className="today-item-icon"
+                  style={
+                    item.color ? { backgroundColor: item.color } : undefined
+                  }
+                  aria-hidden="true"
                 >
-                  <span
-                    className="today-item-icon"
-                    style={
-                      item.color ? { backgroundColor: item.color } : undefined
-                    }
-                    aria-hidden="true"
-                  >
-                    {group === 'done'
-                      ? '✓'
-                      : item.icon || (item.type === 'habit' ? '★' : '◆')}
-                  </span>
-                  <span className="today-item-copy">
-                    <strong>{item.title}</strong>
-                    <small>
-                      {typeLabel(item.type)} · {dueLabel(item)} · {item.points}{' '}
-                      {item.points === 1 ? 'point' : 'points'}
-                    </small>
-                  </span>
+                  {groupFor(item) === 'done'
+                    ? '✓'
+                    : item.icon || (item.type === 'habit' ? '★' : '◆')}
+                </span>
+                <span className="today-item-copy">
+                  <strong>{item.title}</strong>
+                  <small>
+                    {typeLabel(item.type)} · {dueLabel(item)} · {item.points}{' '}
+                    {item.points === 1 ? 'point' : 'points'}
+                  </small>
+                </span>
+              </button>
+              {item.availableActions.includes('submit') && (
+                <button
+                  className="button button-primary today-primary"
+                  type="button"
+                  disabled={submittingId === item.id}
+                  aria-busy={submittingId === item.id}
+                  onClick={() => onSubmit(item)}
+                >
+                  {submittingId === item.id ? 'Sending…' : 'I did it'}
                 </button>
-                {item.availableActions.includes('submit') && (
+              )}
+              {item.availableActions.includes('withdraw') &&
+                item.completionId && (
                   <button
-                    className="button button-primary today-primary"
+                    className="button button-secondary today-secondary"
                     type="button"
-                    disabled={submittingId === item.id}
-                    aria-busy={submittingId === item.id}
-                    onClick={() => onSubmit(item)}
+                    disabled={withdrawingId === item.id}
+                    aria-busy={withdrawingId === item.id}
+                    onClick={() => onWithdraw(item)}
                   >
-                    {submittingId === item.id ? 'Sending…' : 'I did it'}
+                    {withdrawingId === item.id
+                      ? 'Withdrawing…'
+                      : 'Withdraw submission'}
                   </button>
                 )}
-                {item.availableActions.includes('withdraw') &&
-                  item.completionId && (
-                    <button
-                      className="button button-secondary today-secondary"
-                      type="button"
-                      disabled={withdrawingId === item.id}
-                      aria-busy={withdrawingId === item.id}
-                      onClick={() => onWithdraw(item)}
-                    >
-                      {withdrawingId === item.id
-                        ? 'Withdrawing…'
-                        : 'Withdraw submission'}
-                    </button>
-                  )}
-              </article>
-            </li>
-          ))}
-        </ul>
-      )}
+            </article>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

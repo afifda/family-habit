@@ -16,6 +16,8 @@ import (
 	"github.com/family-habit/family-habit/backend/internal/habits"
 	"github.com/family-habit/family-habit/backend/internal/health"
 	"github.com/family-habit/family-habit/backend/internal/points"
+	"github.com/family-habit/family-habit/backend/internal/rewards"
+	"github.com/family-habit/family-habit/backend/internal/routines"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -43,7 +45,7 @@ func NewApp(logger *slog.Logger, readiness health.Checker, pool *pgxpool.Pool, s
 	mux.HandleFunc("GET /health/live", s.live)
 	mux.HandleFunc("GET /health/ready", s.ready)
 	mux.HandleFunc("GET /api/v1", s.apiRoot)
-	a := &authAPI{auth: auth.NewService(pool), pool: pool, secure: secureCookies, limiter: newLoginLimiter(), children: children.NewService(pool), habits: habits.NewService(pool), completions: completions.NewService(pool), points: points.NewService(pool)}
+	a := &authAPI{auth: auth.NewService(pool), pool: pool, secure: secureCookies, limiter: newLoginLimiter(), children: children.NewService(pool), habits: habits.NewService(pool), completions: completions.NewService(pool), points: points.NewService(pool), rewards: rewards.NewService(pool), routines: routines.NewService(pool)}
 	a.routes(mux)
 	return requestLogger(logger, securityHeaders(mux))
 }

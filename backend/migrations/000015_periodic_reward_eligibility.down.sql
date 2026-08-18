@@ -1,0 +1,12 @@
+ALTER TABLE reward_redemptions DROP CONSTRAINT redemption_evaluation_fk, DROP COLUMN eligibility_evaluation_id;
+DROP TRIGGER reward_evaluation_shape ON reward_period_evaluations;
+DROP FUNCTION validate_reward_evaluation_shape();
+DROP TRIGGER reward_evaluation_reversal_adjustment ON point_ledger;
+DROP FUNCTION record_reward_evaluation_reversal();
+DROP TABLE reward_evaluation_adjustments;
+DROP TABLE reward_evaluation_rule_results;
+DROP TRIGGER reward_evaluations_immutable ON reward_period_evaluations;
+DROP FUNCTION prevent_reward_evaluation_rewrite();
+DROP TABLE reward_period_evaluations;
+DROP TABLE reward_eligibility_policies;
+DROP TYPE reward_collection_period;

@@ -30,19 +30,16 @@ export function Login() {
   });
 
   if (!loading && session?.actor === 'parent' && session.parentMode)
-    return <Navigate to="/parent" replace />;
+    return <Navigate to="/" replace />;
 
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
     try {
       await login(values);
       const destination = (location.state as { from?: string } | null)?.from;
-      void navigate(
-        destination?.startsWith('/parent') ? destination : '/parent',
-        {
-          replace: true,
-        },
-      );
+      void navigate(destination?.startsWith('/parent') ? destination : '/', {
+        replace: true,
+      });
     } catch (error) {
       setFormError(
         error instanceof ApiError && error.status === 429

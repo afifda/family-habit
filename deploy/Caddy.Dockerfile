@@ -17,6 +17,8 @@ RUN apk upgrade --no-cache \
 COPY --from=build /caddy /usr/bin/caddy
 RUN setcap cap_net_bind_service=+ep /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
+ENV XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data
 EXPOSE 80 443 443/udp
 USER caddy
 ENTRYPOINT ["caddy"]

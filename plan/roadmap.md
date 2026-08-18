@@ -13,8 +13,10 @@ This checklist is the execution order for the MVP. Items marked **Gate** block l
 - [ ] Phase 6 — Child Today and completion workflow
 - [ ] Phase 7 — Parent approval, points, and history
 - [ ] Phase 8 — Product integration and quality
-- [ ] Phase 9 — VPS production launch
-- [ ] Phase 10 — Pilot and MVP release
+- [ ] Phase 9 — Dynamic routines and optional rewards
+- [ ] Phase 9.1 — Periodic reward eligibility
+- [ ] Phase 10 — VPS production launch
+- [ ] Phase 11 — Pilot and MVP release
 
 ## Phase 0 — Product and UX decisions
 
@@ -170,7 +172,52 @@ Goal: finish the household experience and meet the release quality bar.
 
 Requirements: PR-09, PR-10, and all non-functional requirements.
 
-## Phase 9 — VPS production launch
+## Phase 9 — Dynamic routines and optional rewards
+
+Goal: organize child work around family-defined routines and allow safe, parent-defined point redemption.
+
+- [x] Add household-defined routine groups with optional icons, colors, time hints, ordering, and archival.
+- [x] Assign recurring work per child and one-off tasks to an optional routine group.
+- [x] Snapshot routine presentation on occurrences and preserve existing history.
+- [x] Render Today by routine with workflow-state filters and an automatic Other section.
+- [x] Add an off-by-default household rewards setting and parent-managed reward catalog.
+- [x] Add child eligibility and an atomic requested → fulfilled/cancelled redemption lifecycle.
+- [x] Extend the append-only ledger with exact redemption debits and cancellation refunds.
+- [x] Prevent negative redemption balances and duplicate debit/refund under concurrency.
+- [x] Add separate earned, redeemed, refunded, and net reporting.
+- [ ] Complete tenant, privacy, idempotency, concurrency, accessibility, migration, and browser journey tests.
+- [ ] **Gate:** routine history remains stable and every reward point movement reconciles exactly without overspending.
+
+Detailed proposal: [Routine groups and reward redemption plan](routine-groups-and-rewards.md).
+
+Priority: immediate. Product authorization promotes this work ahead of VPS launch. It may proceed while the remaining Phase 8 manual release evidence is collected, but Phase 8 and Phase 9 gates must both close before production launch.
+
+Dependencies: completed scheduling, occurrence snapshot, completion, and append-only ledger foundations from Phases 5–7.
+
+## Phase 9.1 — Periodic reward eligibility
+
+Goal: let children qualify for rewards through a fair, explainable daily, weekly, or monthly achievement period without resetting their spendable point balance.
+
+- [x] Add an off-by-default, versioned household eligibility policy with daily, weekly, and monthly local-calendar periods.
+- [x] Schedule policy changes at future valid boundaries and snapshot timezone/week-start semantics.
+- [x] Materialize periods and idempotently finalize per-child evaluations after the configured approval grace.
+- [x] Require minimum net approved points and optionally require a completion percentage.
+- [x] Handle late approvals and post-finalization approval reversals with immutable, explainable adjustments.
+- [x] Add an optional per-window redemption-request cap that cancellation does not restore.
+- [x] Require both a passing current evaluation and sufficient signed ledger balance when reserving a reward.
+- [ ] Build parent policy, preview, progress, and evaluation-history experiences.
+- [x] Build child collection progress, rule results, unlock state, and precise redemption-blocked messages.
+- [ ] Update OpenAPI, audit events, reporting projections, and operational evaluation scheduling.
+- [ ] Complete boundary, DST, migration, tenant, privacy, idempotency, concurrency, accessibility, and authenticated browser tests.
+- [ ] **Gate:** eligibility is reproducible and private, never resets points, and concurrent redemption cannot exceed either balance or the evaluated request cap.
+
+Detailed contract: [Periodic reward eligibility contract](../docs/phase-9-1-periodic-eligibility-contract.md).
+
+Priority: immediate follow-on to Phase 9. It may be implemented while remaining Phase 8/9 manual evidence is collected, but its gate also blocks production launch.
+
+Dependencies: Phase 9 reward catalog, atomic redemption reservation, immutable ledger, occurrence local-date attribution, and approval-reversal integrity.
+
+## Phase 10 — VPS production launch
 
 Goal: deploy a secure, observable, and recoverable production system.
 
@@ -186,9 +233,9 @@ Goal: deploy a secure, observable, and recoverable production system.
 - [ ] Restore a production-shaped backup into a temporary database and verify it.
 - [ ] **Gate:** HTTPS, monitoring, backups, and tested restoration are working.
 
-Dependencies: Phase 8 gate and production prerequisites in the technical requirements.
+Dependencies: Phase 8, Phase 9, and Phase 9.1 gates plus production prerequisites in the technical requirements.
 
-## Phase 10 — Pilot and MVP release
+## Phase 11 — Pilot and MVP release
 
 Goal: verify usefulness and safety with the family before expanding scope.
 
@@ -206,7 +253,6 @@ Goal: verify usefulness and safety with the family before expanding scope.
 These are deliberately not part of the checklist above:
 
 - Second-parent invitations and account recovery
-- Rewards catalog and redemption
 - Streaks and comparative/gamified summaries beyond the approved progress reports
 - Reminders and notifications
 - PWA installation and limited offline behavior

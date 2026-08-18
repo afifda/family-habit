@@ -7,6 +7,8 @@ const activityCopy = {
   award: 'Finished work',
   approval_reversal: 'Points updated by a parent',
   manual_correction: 'Bonus from a parent',
+  reward_redemption: 'Reward requested',
+  reward_refund: 'Reward refunded',
 } as const;
 
 export function ChildPoints() {

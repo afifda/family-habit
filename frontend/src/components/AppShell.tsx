@@ -8,6 +8,8 @@ const navigation = [
   { to: '/parent/review', label: 'Review' },
   { to: '/parent/children', label: 'Children' },
   { to: '/parent/habits', label: 'Habits & tasks' },
+  { to: '/parent/routines', label: 'Routine groups' },
+  { to: '/parent/rewards', label: 'Rewards' },
   { to: '/parent/reports', label: 'Reports' },
   { to: '/parent/settings', label: 'Settings' },
 ] as const;

@@ -5,6 +5,7 @@ import {
   childrenApi,
   habitsApi,
   householdApi,
+  routineGroupsApi,
   tasksApi,
   type Assignment,
   type Child,
@@ -42,6 +43,8 @@ type HabitDraft = {
   scheduleKind: 'daily' | 'weekdays';
   weekdays: Weekday[];
   effectiveDate: string;
+  routineGroupId: string;
+  sortOrder: string;
 };
 
 const emptyHabit = (timezone?: string): HabitDraft => ({
@@ -52,6 +55,8 @@ const emptyHabit = (timezone?: string): HabitDraft => ({
   scheduleKind: 'daily',
   weekdays: [],
   effectiveDate: localToday(timezone),
+  routineGroupId: '',
+  sortOrder: '0',
 });
 
 type TaskDraft = {
@@ -60,6 +65,8 @@ type TaskDraft = {
   description: string;
   dueDate: string;
   points: string;
+  routineGroupId: string;
+  sortOrder: string;
 };
 
 const emptyTask = (timezone?: string): TaskDraft => ({
@@ -68,6 +75,8 @@ const emptyTask = (timezone?: string): TaskDraft => ({
   description: '',
   dueDate: localToday(timezone),
   points: '10',
+  routineGroupId: '',
+  sortOrder: '0',
 });
 
 function scheduleFrom(draft: HabitDraft): Schedule {
@@ -123,6 +132,10 @@ export function HabitsTasks() {
     queryKey: ['tasks'],
     queryFn: () => tasksApi.list(),
   });
+  const routineGroups = useQuery({
+    queryKey: ['routine-groups'],
+    queryFn: () => routineGroupsApi.list(),
+  });
 
   const saveHabit = useMutation({
     mutationFn: async () => {
@@ -160,6 +173,8 @@ export function HabitsTasks() {
         points: Number(habitDraft.points),
         schedule: scheduleFrom(habitDraft),
         effectiveStartDate: habitDraft.effectiveDate,
+        routineGroupId: habitDraft.routineGroupId || null,
+        sortOrder: Number(habitDraft.sortOrder),
       });
       return habit;
     },
@@ -188,6 +203,8 @@ export function HabitsTasks() {
         points: Number(habitDraft.points),
         schedule: scheduleFrom(habitDraft),
         effectiveDate: habitDraft.effectiveDate,
+        routineGroupId: habitDraft.routineGroupId || null,
+        sortOrder: Number(habitDraft.sortOrder),
       };
       return assignmentEditor!.version
         ? habitsApi.updateAssignment(
@@ -210,6 +227,8 @@ export function HabitsTasks() {
         description: taskDraft.description.trim(),
         dueDate: taskDraft.dueDate,
         points: Number(taskDraft.points),
+        routineGroupId: taskDraft.routineGroupId || null,
+        sortOrder: Number(taskDraft.sortOrder),
       };
       return taskEditor === 'new'
         ? tasksApi.create({ ...input, childId: taskDraft.childId })
@@ -282,6 +301,8 @@ export function HabitsTasks() {
         assignment.schedule.kind === 'weekdays'
           ? assignment.schedule.weekdays
           : [],
+      routineGroupId: assignment.routineGroupId ?? '',
+      sortOrder: String(assignment.sortOrder ?? 0),
     });
     setAssignmentEditor(assignment);
   }
@@ -317,6 +338,8 @@ export function HabitsTasks() {
       description: task.description ?? '',
       dueDate: task.dueDate,
       points: String(task.points),
+      routineGroupId: task.routineGroupId ?? '',
+      sortOrder: String(task.sortOrder ?? 0),
     });
     setTaskEditor(task);
   }
@@ -333,8 +356,13 @@ export function HabitsTasks() {
     saveTask.mutate();
   }
 
-  const loading = children.isPending || habits.isPending || tasks.isPending;
-  const loadError = children.error ?? habits.error ?? tasks.error;
+  const loading =
+    children.isPending ||
+    habits.isPending ||
+    tasks.isPending ||
+    routineGroups.isPending;
+  const loadError =
+    children.error ?? habits.error ?? tasks.error ?? routineGroups.error;
   const activeTasks =
     tasks.data?.filter((task) => task.status === 'active') ?? [];
   const cancelledTasks =
@@ -709,6 +737,24 @@ export function HabitsTasks() {
                       ))}
                     </fieldset>
                   )}
+                  <SelectField
+                    id="habit-routine"
+                    label="Routine group (optional)"
+                    value={habitDraft.routineGroupId}
+                    onChange={(event) =>
+                      setHabitDraft({
+                        ...habitDraft,
+                        routineGroupId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Other (ungrouped)</option>
+                    {routineGroups.data?.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.icon} {group.name}
+                      </option>
+                    ))}
+                  </SelectField>
                 </fieldset>
               </>
             )}
@@ -820,6 +866,24 @@ export function HabitsTasks() {
                 }
               />
             </div>
+            <SelectField
+              id="task-routine"
+              label="Routine group (optional)"
+              value={taskDraft.routineGroupId}
+              onChange={(event) =>
+                setTaskDraft({
+                  ...taskDraft,
+                  routineGroupId: event.target.value,
+                })
+              }
+            >
+              <option value="">Other (ungrouped)</option>
+              {routineGroups.data?.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.icon} {group.name}
+                </option>
+              ))}
+            </SelectField>
             <p className="helper-inline">
               If it is not finished by its due date, it will stay visible as
               overdue.
@@ -920,6 +984,24 @@ export function HabitsTasks() {
                 ))}
               </fieldset>
             )}
+            <SelectField
+              id="assignment-routine"
+              label="Routine group"
+              value={habitDraft.routineGroupId}
+              onChange={(event) =>
+                setHabitDraft({
+                  ...habitDraft,
+                  routineGroupId: event.target.value,
+                })
+              }
+            >
+              <option value="">Other (ungrouped)</option>
+              {routineGroups.data?.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.icon} {group.name}
+                </option>
+              ))}
+            </SelectField>
             <FormField
               id="assignment-effective-date"
               label="Effective date"
