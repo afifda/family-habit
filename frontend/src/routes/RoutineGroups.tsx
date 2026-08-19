@@ -312,7 +312,7 @@ export function RoutineGroups() {
               />
             </label>
           </div>
-          <div className="card-actions">
+          <div className="form-actions">
             <button className="button button-primary" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save group'}
             </button>
@@ -365,7 +365,7 @@ export function RoutineGroups() {
               onChange={(event) => setArchiveDate(event.target.value)}
             />
           </label>
-          <div className="card-actions">
+          <div className="form-actions">
             <button
               className="button button-danger"
               disabled={archive.isPending}

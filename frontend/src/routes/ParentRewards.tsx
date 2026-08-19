@@ -412,7 +412,7 @@ export function ParentRewards() {
                   </label>
                 ))}
               </fieldset>
-              <div className="card-actions">
+              <div className="form-actions">
                 <button
                   className="button button-primary"
                   disabled={save.isPending}
@@ -456,7 +456,7 @@ export function ParentRewards() {
               {messageForError(cancelMutation.error)}
             </div>
           )}
-          <div className="card-actions">
+          <div className="form-actions">
             <button
               className="button button-danger"
               disabled={!reason.trim() || cancelMutation.isPending}
