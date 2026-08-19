@@ -4,8 +4,14 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { rewardsApi, routineGroupsApi } from '../api/client';
+import {
+  childrenApi,
+  householdApi,
+  rewardsApi,
+  routineGroupsApi,
+} from '../api/client';
 import { ChildRewards } from './ChildRewards';
+import { ParentRewards } from './ParentRewards';
 import { RoutineGroups } from './RoutineGroups';
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -19,7 +25,20 @@ vi.mock('../api/client', async (importOriginal) => {
       archive: vi.fn(),
       reorder: vi.fn(),
     },
+    childrenApi: {
+      list: vi.fn(),
+    },
+    householdApi: {
+      get: vi.fn(),
+    },
     rewardsApi: {
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      archive: vi.fn(),
+      redemptions: vi.fn(),
+      fulfill: vi.fn(),
+      cancel: vi.fn(),
       childCatalog: vi.fn(),
       childRedemptions: vi.fn(),
       redeem: vi.fn(),
@@ -85,6 +104,50 @@ describe('Phase 9 routines and rewards', () => {
       ],
     });
     vi.mocked(rewardsApi.childRedemptions).mockResolvedValue([]);
+    vi.mocked(householdApi.get).mockResolvedValue({
+      id: 'household-1',
+      name: 'Test household',
+      timezone: 'Asia/Jakarta',
+      weekStartsOn: 'sunday',
+      parentModeTimeoutMinutes: 15,
+      rewardsEnabled: true,
+      version: 1,
+    });
+    vi.mocked(childrenApi.list).mockResolvedValue([
+      {
+        id: 'child-1',
+        nickname: 'Ari',
+        avatar: 'fox',
+        color: '#f2b84b',
+        pinEnabled: false,
+        active: true,
+        createdAt: '2026-08-18T00:00:00Z',
+        updatedAt: '2026-08-18T00:00:00Z',
+      },
+    ]);
+    vi.mocked(rewardsApi.list).mockResolvedValue([]);
+    vi.mocked(rewardsApi.redemptions).mockResolvedValue([]);
+    vi.mocked(rewardsApi.archive).mockResolvedValue(undefined);
+    vi.mocked(rewardsApi.fulfill).mockResolvedValue({
+      id: 'redemption-1',
+      childId: 'child-1',
+      rewardId: 'reward-1',
+      rewardTitle: 'Choose movie night',
+      costPoints: 25,
+      state: 'fulfilled',
+      requestedAt: '2026-08-18T00:00:00Z',
+      version: 2,
+    });
+    vi.mocked(rewardsApi.cancel).mockResolvedValue({
+      id: 'redemption-1',
+      childId: 'child-1',
+      rewardId: 'reward-1',
+      rewardTitle: 'Choose movie night',
+      costPoints: 25,
+      state: 'cancelled',
+      requestedAt: '2026-08-18T00:00:00Z',
+      version: 2,
+    });
   });
 
   afterEach(cleanup);
@@ -132,6 +195,43 @@ describe('Phase 9 routines and rewards', () => {
         expect.objectContaining({
           name: 'Morning Routine',
           icon: '☀',
+        }),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it('lets parents choose suggested reward icons or enter a custom icon', async () => {
+    const user = userEvent.setup();
+    vi.mocked(rewardsApi.create).mockResolvedValue({
+      id: 'reward-2',
+      title: 'Puzzle time',
+      description: '',
+      icon: 'VIP',
+      costPoints: 25,
+      availabilityScope: 'all_active_children',
+      eligibleChildIds: [],
+      active: true,
+      version: 1,
+    });
+    renderPage(<ParentRewards />);
+
+    await user.click(await screen.findByRole('button', { name: 'New reward' }));
+    await user.type(screen.getByLabelText('Title'), 'Puzzle time');
+    await user.click(screen.getByRole('button', { name: 'Use 🧩 icon' }));
+    expect(screen.getByRole('button', { name: 'Use 🧩 icon' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.clear(screen.getByLabelText('Custom icon'));
+    await user.type(screen.getByLabelText('Custom icon'), 'VIP');
+    await user.click(screen.getByRole('button', { name: 'Save reward' }));
+
+    await waitFor(() =>
+      expect(rewardsApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Puzzle time',
+          icon: 'VIP',
         }),
         expect.any(String),
       ),

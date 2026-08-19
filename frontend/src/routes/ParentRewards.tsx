@@ -22,6 +22,25 @@ const empty: RewardInput = {
   eligibleChildIds: [],
 };
 
+const rewardIconChoices = [
+  '🎁',
+  '⭐',
+  '🍦',
+  '🎮',
+  '🎬',
+  '📚',
+  '🚲',
+  '🍕',
+  '🎨',
+  '⚽',
+  '🏆',
+  '🎟️',
+  '🧩',
+  '🧸',
+  '🍿',
+  '🛼',
+];
+
 export function ParentRewards() {
   const cache = useQueryClient();
   const household = useQuery({
@@ -361,16 +380,37 @@ export function ParentRewards() {
                     />
                   </label>
                   <div className="form-row">
-                    <label className="form-field">
-                      Icon
-                      <input
-                        maxLength={40}
-                        value={draft.icon ?? ''}
-                        onChange={(e) =>
-                          setDraft({ ...draft, icon: e.target.value })
-                        }
-                      />
-                    </label>
+                    <fieldset className="icon-picker">
+                      <legend>Icon</legend>
+                      <div className="icon-choice-grid">
+                        {rewardIconChoices.map((icon) => (
+                          <button
+                            key={icon}
+                            type="button"
+                            className={
+                              draft.icon === icon
+                                ? 'icon-choice is-selected'
+                                : 'icon-choice'
+                            }
+                            aria-label={`Use ${icon} icon`}
+                            aria-pressed={draft.icon === icon}
+                            onClick={() => setDraft({ ...draft, icon })}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="form-field icon-custom-field">
+                        Custom icon
+                        <input
+                          maxLength={40}
+                          value={draft.icon ?? ''}
+                          onChange={(e) =>
+                            setDraft({ ...draft, icon: e.target.value })
+                          }
+                        />
+                      </label>
+                    </fieldset>
                     <label className="form-field">
                       Cost in points
                       <input
