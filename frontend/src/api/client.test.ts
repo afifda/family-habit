@@ -4,6 +4,7 @@ import {
   authApi,
   householdApi,
   overviewApi,
+  profileSummaryApi,
   profilesApi,
   rewardsApi,
   reviewApi,
@@ -75,6 +76,27 @@ describe('profile API client', () => {
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit?];
     expect(url).toBe('/api/v1/profiles');
+  });
+
+  it('reads signed-in profile card summaries separately from parent overview', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            date: '2026-08-19',
+            timezone: 'Asia/Jakarta',
+            pending: 0,
+            children: [],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await profileSummaryApi.get();
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit?];
+    expect(url).toBe('/api/v1/profiles/summary');
   });
 });
 

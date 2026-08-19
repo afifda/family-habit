@@ -55,3 +55,18 @@ func TestValidEmail(t *testing.T) {
 		}
 	}
 }
+
+func TestWeekStartMappingAcceptsEveryWeekday(t *testing.T) {
+	for i, name := range []string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"} {
+		got, ok := parseWeekStart(name)
+		if !ok || got != int16(i) {
+			t.Fatalf("parseWeekStart(%q)=%d,%v want %d,true", name, got, ok, i)
+		}
+		if back := weekStartName(i); back != name {
+			t.Fatalf("weekStartName(%d)=%q want %q", i, back, name)
+		}
+	}
+	if _, ok := parseWeekStart("funday"); ok {
+		t.Fatal("invalid weekday accepted")
+	}
+}

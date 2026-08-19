@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,7 +21,18 @@ var (
 	ErrIdempotency     = errors.New("idempotency conflict")
 	ErrValidation      = errors.New("validation")
 )
-var allowedIcons = map[string]bool{"": true, "🌅": true, "☀️": true, "🏫": true, "🌆": true, "🌙": true, "⭐": true, "🎁": true, "🍦": true, "🎮": true, "🎬": true, "📚": true, "🚲": true, "🍕": true, "🎨": true, "⚽": true}
+
+func safeIcon(v string) bool {
+	if len([]rune(v)) > 40 {
+		return false
+	}
+	for _, r := range v {
+		if r == '<' || r == '>' || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
 
 type Service struct{ pool *pgxpool.Pool }
 
@@ -111,7 +124,8 @@ func (s *Service) List(c context.Context, f string, arch bool) ([]Group, error) 
 	return out, rows.Err()
 }
 func (s *Service) Create(c context.Context, sid, f, k string, h []byte, in Input) (Group, bool, error) {
-	if !allowedIcons[in.Icon] {
+	in.Icon = strings.TrimSpace(in.Icon)
+	if !safeIcon(in.Icon) {
 		return Group{}, false, ErrValidation
 	}
 	tx, e := s.pool.Begin(c)
@@ -145,7 +159,11 @@ func (s *Service) Create(c context.Context, sid, f, k string, h []byte, in Input
 	return g, false, tx.Commit(c)
 }
 func (s *Service) Update(c context.Context, sid, f, id, k string, h []byte, v int64, in UpdateInput) (Group, bool, error) {
-	if in.IconSet && !allowedIcons[stringValue(in.Icon)] {
+	if in.IconSet && in.Icon != nil {
+		icon := strings.TrimSpace(*in.Icon)
+		in.Icon = &icon
+	}
+	if in.IconSet && !safeIcon(stringValue(in.Icon)) {
 		return Group{}, false, ErrValidation
 	}
 	tx, e := s.pool.Begin(c)

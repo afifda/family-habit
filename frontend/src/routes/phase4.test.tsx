@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   childrenApi,
-  overviewApi,
+  profileSummaryApi,
   profilesApi,
   type Child,
 } from '../api/client';
@@ -33,7 +33,7 @@ vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
   return {
     ...actual,
-    overviewApi: { get: vi.fn() },
+    profileSummaryApi: { get: vi.fn() },
     profilesApi: { list: vi.fn() },
     childrenApi: {
       list: vi.fn(),
@@ -82,7 +82,13 @@ describe('Phase 4 shared profile experience', () => {
     auth.session.parentMode = false;
     auth.enterChild.mockReset();
     auth.leaveChild.mockReset();
-    vi.mocked(overviewApi.get).mockReset();
+    vi.mocked(profileSummaryApi.get).mockReset();
+    vi.mocked(profileSummaryApi.get).mockResolvedValue({
+      date: '2026-08-09',
+      timezone: 'Asia/Jakarta',
+      pending: 0,
+      children: [],
+    });
     vi.mocked(profilesApi.list).mockReset();
     vi.mocked(childrenApi.list).mockReset();
     vi.mocked(childrenApi.create).mockReset();
@@ -158,7 +164,7 @@ describe('Phase 4 shared profile experience', () => {
     auth.session.actor = 'parent';
     auth.session.parentMode = true;
     vi.mocked(profilesApi.list).mockResolvedValue([profile]);
-    vi.mocked(overviewApi.get).mockResolvedValue({
+    vi.mocked(profileSummaryApi.get).mockResolvedValue({
       date: '2026-08-09',
       timezone: 'Asia/Jakarta',
       pending: 1,
@@ -188,17 +194,35 @@ describe('Phase 4 shared profile experience', () => {
     expect(screen.getByText('Waiting')).toBeInTheDocument();
   });
 
-  it('does not request parent point totals outside Parent Mode', async () => {
+  it('shows today point summaries on the shared profile picker after sign-in', async () => {
     vi.mocked(profilesApi.list).mockResolvedValue([profile]);
+    vi.mocked(profileSummaryApi.get).mockResolvedValue({
+      date: '2026-08-09',
+      timezone: 'Asia/Jakarta',
+      pending: 0,
+      children: [
+        {
+          childId: profile.id,
+          nickname: profile.nickname,
+          avatar: profile.avatar,
+          color: profile.color,
+          completed: 0,
+          total: 1,
+          pending: 0,
+          approvedPointsToday: 7,
+          waitingPointsToday: 0,
+        },
+      ],
+    });
     renderWithApp(<ProfilePicker />);
 
     expect(
       await screen.findByRole('button', {
-        name: 'Ari, PIN required',
+        name: 'Ari, 7 approved points and 0 waiting points today, PIN required',
       }),
     ).toBeInTheDocument();
-    expect(overviewApi.get).not.toHaveBeenCalled();
-    expect(screen.queryByText('Approved today')).not.toBeInTheDocument();
+    expect(profileSummaryApi.get).toHaveBeenCalledOnce();
+    expect(screen.getByText('Approved today')).toBeInTheDocument();
   });
 
   it('identifies the exact active child and leaves through the server transition', async () => {

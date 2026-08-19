@@ -3,10 +3,14 @@ import { ReactNode, useEffect, useRef } from 'react';
 export function AccessibleDialog({
   titleId,
   onClose,
+  backdropClassName = '',
+  className = '',
   children,
 }: {
   titleId: string;
   onClose: () => void;
+  backdropClassName?: string;
+  className?: string;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -47,10 +51,15 @@ export function AccessibleDialog({
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className={['dialog-backdrop', backdropClassName]
+        .filter(Boolean)
+        .join(' ')}
+      role="presentation"
+    >
       <div
         ref={dialogRef}
-        className="dialog"
+        className={['dialog', className].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

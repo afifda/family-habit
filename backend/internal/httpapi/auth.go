@@ -67,6 +67,38 @@ type registerInput struct {
 	WeekStartsOn  string `json:"weekStartsOn"`
 }
 
+var weekdayNameToNumber = map[string]int16{
+	"sunday":    0,
+	"monday":    1,
+	"tuesday":   2,
+	"wednesday": 3,
+	"thursday":  4,
+	"friday":    5,
+	"saturday":  6,
+}
+
+var weekdayNumberToName = map[int]string{
+	0: "sunday",
+	1: "monday",
+	2: "tuesday",
+	3: "wednesday",
+	4: "thursday",
+	5: "friday",
+	6: "saturday",
+}
+
+func parseWeekStart(value string) (int16, bool) {
+	week, ok := weekdayNameToNumber[strings.ToLower(strings.TrimSpace(value))]
+	return week, ok
+}
+
+func weekStartName(value int) string {
+	if name, ok := weekdayNumberToName[value]; ok {
+		return name
+	}
+	return "sunday"
+}
+
 func (a *authAPI) register(w http.ResponseWriter, r *http.Request) {
 	var in registerInput
 	if !decode(w, r, &in) {
@@ -87,11 +119,9 @@ func (a *authAPI) register(w http.ResponseWriter, r *http.Request) {
 	if _, err := time.LoadLocation(in.Timezone); err != nil {
 		issues = append(issues, validationIssue{"timezone", "invalid", "Use a valid IANA timezone."})
 	}
-	week := int16(0)
-	if in.WeekStartsOn == "monday" {
-		week = 1
-	} else if in.WeekStartsOn != "sunday" {
-		issues = append(issues, validationIssue{"weekStartsOn", "invalid", "Choose sunday or monday."})
+	week, ok := parseWeekStart(in.WeekStartsOn)
+	if !ok {
+		issues = append(issues, validationIssue{"weekStartsOn", "invalid", "Choose a weekday."})
 	}
 	if len(issues) > 0 {
 		writeValidation(w, issues)
@@ -292,11 +322,9 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 	}
 	var week *int16
 	if in.WeekStartsOn != nil {
-		v := int16(0)
-		if *in.WeekStartsOn == "monday" {
-			v = 1
-		} else if *in.WeekStartsOn != "sunday" {
-			issues = append(issues, validationIssue{"weekStartsOn", "invalid", "Choose sunday or monday."})
+		v, ok := parseWeekStart(*in.WeekStartsOn)
+		if !ok {
+			issues = append(issues, validationIssue{"weekStartsOn", "invalid", "Choose a weekday."})
 		}
 		week = &v
 	}
@@ -384,7 +412,7 @@ func (a *authAPI) updateHousehold(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec(r.Context(), `UPDATE users SET parent_pin_hash=$2,updated_at=now() WHERE id=$1`, s.UserID, pin)
 	}
 	if err == nil && in.RewardsEnabled != nil {
-		err = tx.QueryRow(r.Context(), `SELECT jsonb_build_object('data',jsonb_build_object('id',id,'name',name,'timezone',timezone,'weekStartsOn',CASE WHEN week_starts_on=1 THEN 'monday' ELSE 'sunday' END,'parentModeTimeoutMinutes',parent_idle_minutes,'rewardsEnabled',rewards_enabled,'version',version)),version FROM families WHERE id=$1`, s.FamilyID).Scan(&householdReply, &householdVersion)
+		err = tx.QueryRow(r.Context(), `SELECT jsonb_build_object('data',jsonb_build_object('id',id,'name',name,'timezone',timezone,'weekStartsOn',CASE week_starts_on WHEN 1 THEN 'monday' WHEN 2 THEN 'tuesday' WHEN 3 THEN 'wednesday' WHEN 4 THEN 'thursday' WHEN 5 THEN 'friday' WHEN 6 THEN 'saturday' ELSE 'sunday' END,'parentModeTimeoutMinutes',parent_idle_minutes,'rewardsEnabled',rewards_enabled,'version',version)),version FROM families WHERE id=$1`, s.FamilyID).Scan(&householdReply, &householdVersion)
 	}
 	if err == nil && in.RewardsEnabled != nil {
 		_, err = tx.Exec(r.Context(), `UPDATE idempotency_records SET response_body=$4::jsonb,response_status=200 WHERE family_id=$1 AND session_id=$2 AND route_family='household.rewards' AND idempotency_key=$3`, s.FamilyID, s.ID, mutationKey, householdReply)
@@ -421,10 +449,7 @@ func (a *authAPI) householdResponse(w http.ResponseWriter, r *http.Request, id s
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
 	}
-	start := "sunday"
-	if week == 1 {
-		start = "monday"
-	}
+	start := weekStartName(week)
 	w.Header().Set("ETag", strconv.FormatInt(version, 10))
 	writeJSON(w, 200, map[string]any{"data": map[string]any{"id": id, "name": name, "timezone": tz, "weekStartsOn": start, "parentModeTimeoutMinutes": idle, "rewardsEnabled": rewardsEnabled, "version": version}})
 }

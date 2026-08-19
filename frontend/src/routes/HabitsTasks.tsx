@@ -15,6 +15,7 @@ import {
   type Weekday,
 } from '../api/client';
 import { messageForError } from '../api/errors';
+import { AccessibleDialog } from '../components/AccessibleDialog';
 import { FormField, SelectField } from '../components/FormField';
 
 const weekdays: { value: Weekday; label: string }[] = [
@@ -34,6 +35,8 @@ const localToday = (timezone = 'Asia/Jakarta') =>
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+
+const KEEP_ASSIGNMENT_ROUTINES = '__keep_assignment_routines__';
 
 type HabitDraft = {
   title: string;
@@ -148,9 +151,30 @@ export function HabitsTasks() {
           ...presentation,
           effectiveDate: habitDraft.effectiveDate,
         };
-        return habitEditor!.version
+        const savedHabit = await (habitEditor!.version
           ? habitsApi.update(habitEditor!.id, input, habitEditor!.version)
-          : habitsApi.update(habitEditor!.id, input);
+          : habitsApi.update(habitEditor!.id, input));
+        if (habitDraft.routineGroupId !== KEEP_ASSIGNMENT_ROUTINES) {
+          const assignments = habitEditor!.assignments?.filter(
+            (assignment) => assignment.active,
+          );
+          await Promise.all(
+            (assignments ?? []).map((assignment) =>
+              habitsApi.updateAssignment(
+                assignment.id,
+                {
+                  points: assignment.points,
+                  schedule: assignment.schedule,
+                  effectiveDate: habitDraft.effectiveDate,
+                  routineGroupId: habitDraft.routineGroupId || null,
+                  sortOrder: assignment.sortOrder ?? 0,
+                },
+                assignment.version,
+              ),
+            ),
+          );
+        }
+        return savedHabit;
       }
       let habitId = pendingHabitId;
       let habit: Habit;
@@ -256,16 +280,21 @@ export function HabitsTasks() {
   function openNewHabit() {
     setFormError('');
     setPendingHabitId(null);
+    setTaskEditor(null);
+    setAssignmentEditor(null);
     setHabitDraft(emptyHabit(household.data?.timezone));
     setHabitEditor('new');
   }
 
   function openHabit(habit: Habit) {
     setFormError('');
+    setTaskEditor(null);
+    setAssignmentEditor(null);
     setHabitDraft({
       ...emptyHabit(household.data?.timezone),
       title: habit.title,
       description: habit.description ?? '',
+      routineGroupId: KEEP_ASSIGNMENT_ROUTINES,
     });
     setHabitEditor(habit);
   }
@@ -293,6 +322,8 @@ export function HabitsTasks() {
 
   function openAssignment(assignment: Assignment) {
     setFormError('');
+    setHabitEditor(null);
+    setTaskEditor(null);
     setHabitDraft({
       ...emptyHabit(household.data?.timezone),
       points: String(assignment.points),
@@ -323,6 +354,8 @@ export function HabitsTasks() {
 
   function openNewTask() {
     setFormError('');
+    setHabitEditor(null);
+    setAssignmentEditor(null);
     setTaskDraft({
       ...emptyTask(household.data?.timezone),
       childId: children.data?.[0]?.id ?? '',
@@ -332,6 +365,8 @@ export function HabitsTasks() {
 
   function openTask(task: OneOffTask) {
     setFormError('');
+    setHabitEditor(null);
+    setAssignmentEditor(null);
     setTaskDraft({
       childId: task.childId,
       title: task.title,
@@ -606,432 +641,511 @@ export function HabitsTasks() {
       )}
 
       {habitEditor && (
-        <section
-          className="editor-card work-editor"
-          aria-labelledby="habit-editor-heading"
+        <AccessibleDialog
+          titleId="habit-editor-heading"
+          backdropClassName="work-editor-backdrop"
+          className="work-editor-dialog"
+          onClose={() => setHabitEditor(null)}
         >
-          <h2 id="habit-editor-heading">
-            {habitEditor === 'new'
-              ? 'Create a habit'
-              : `Edit ${habitEditor.title}`}
-          </h2>
-          {habitEditor !== 'new' && (
-            <div className="future-notice">
-              <strong>This and future dates</strong>
-              <p>
-                Your change starts on the effective date. Earlier occurrences
-                keep their original title and points.
-              </p>
+          <div className="work-editor-header">
+            <div>
+              <p className="eyebrow">Habit</p>
+              <h2 id="habit-editor-heading">
+                {habitEditor === 'new'
+                  ? 'Create a habit'
+                  : `Edit ${habitEditor.title}`}
+              </h2>
             </div>
-          )}
-          <form className="auth-form" onSubmit={submitHabit} noValidate>
-            {formError && (
-              <div className="form-alert" role="alert">
-                {formError}
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setHabitEditor(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="work-editor-body">
+            {habitEditor !== 'new' && (
+              <div className="future-notice">
+                <strong>This and future dates</strong>
+                <p>
+                  Your change starts on the effective date. Earlier occurrences
+                  keep their original title, points, schedule, and routine.
+                </p>
               </div>
             )}
-            <fieldset>
-              <legend>1. Habit details</legend>
+            <form className="auth-form" onSubmit={submitHabit} noValidate>
+              {formError && (
+                <div className="form-alert" role="alert">
+                  {formError}
+                </div>
+              )}
+              <fieldset>
+                <legend>1. Habit details</legend>
+                <FormField
+                  id="habit-title"
+                  label="Habit name"
+                  maxLength={120}
+                  data-initial-focus
+                  value={habitDraft.title}
+                  onChange={(event) =>
+                    setHabitDraft({ ...habitDraft, title: event.target.value })
+                  }
+                />
+                <FormField
+                  id="habit-description"
+                  label="Description (optional)"
+                  maxLength={500}
+                  value={habitDraft.description}
+                  onChange={(event) =>
+                    setHabitDraft({
+                      ...habitDraft,
+                      description: event.target.value,
+                    })
+                  }
+                />
+              </fieldset>
+              {habitEditor === 'new' && (
+                <>
+                  <fieldset>
+                    <legend>2. Who does it?</legend>
+                    <div className="choice-grid">
+                      {children.data?.map((child) => (
+                        <label key={child.id}>
+                          <input
+                            type="checkbox"
+                            checked={habitDraft.childIds.includes(child.id)}
+                            onChange={() =>
+                              setHabitDraft({
+                                ...habitDraft,
+                                childIds: habitDraft.childIds.includes(child.id)
+                                  ? habitDraft.childIds.filter(
+                                      (id) => id !== child.id,
+                                    )
+                                  : [...habitDraft.childIds, child.id],
+                              })
+                            }
+                          />
+                          {child.nickname}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>3. Points and schedule</legend>
+                    <FormField
+                      id="habit-points"
+                      label="Points"
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={habitDraft.points}
+                      onChange={(event) =>
+                        setHabitDraft({
+                          ...habitDraft,
+                          points: event.target.value,
+                        })
+                      }
+                    />
+                    <SelectField
+                      id="habit-frequency"
+                      label="Frequency"
+                      value={habitDraft.scheduleKind}
+                      onChange={(event) =>
+                        setHabitDraft({
+                          ...habitDraft,
+                          scheduleKind: event.target
+                            .value as HabitDraft['scheduleKind'],
+                        })
+                      }
+                    >
+                      <option value="daily">Every day</option>
+                      <option value="weekdays">Selected weekdays</option>
+                    </SelectField>
+                    {habitDraft.scheduleKind === 'weekdays' && (
+                      <fieldset className="weekday-picker">
+                        <legend>Days</legend>
+                        {weekdays.map((day) => (
+                          <label key={day.value}>
+                            <input
+                              type="checkbox"
+                              checked={habitDraft.weekdays.includes(day.value)}
+                              onChange={() =>
+                                setHabitDraft({
+                                  ...habitDraft,
+                                  weekdays: habitDraft.weekdays.includes(
+                                    day.value,
+                                  )
+                                    ? habitDraft.weekdays.filter(
+                                        (value) => value !== day.value,
+                                      )
+                                    : [...habitDraft.weekdays, day.value],
+                                })
+                              }
+                            />
+                            {day.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    <SelectField
+                      id="habit-routine"
+                      label="Routine group (optional)"
+                      value={habitDraft.routineGroupId}
+                      onChange={(event) =>
+                        setHabitDraft({
+                          ...habitDraft,
+                          routineGroupId: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Other (ungrouped)</option>
+                      {routineGroups.data?.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.icon} {group.name}
+                        </option>
+                      ))}
+                    </SelectField>
+                  </fieldset>
+                </>
+              )}
               <FormField
-                id="habit-title"
-                label="Habit name"
-                maxLength={120}
-                value={habitDraft.title}
-                onChange={(event) =>
-                  setHabitDraft({ ...habitDraft, title: event.target.value })
-                }
-              />
-              <FormField
-                id="habit-description"
-                label="Description (optional)"
-                maxLength={500}
-                value={habitDraft.description}
+                id="habit-effective-date"
+                label={habitEditor === 'new' ? 'Start date' : 'Effective date'}
+                type="date"
+                value={habitDraft.effectiveDate}
                 onChange={(event) =>
                   setHabitDraft({
                     ...habitDraft,
+                    effectiveDate: event.target.value,
+                  })
+                }
+              />
+              {habitEditor !== 'new' && (
+                <SelectField
+                  id="habit-routine-all"
+                  label="Routine group for all assignments"
+                  hint="Choose a routine to move every active child assignment from the effective date, or keep assignment-specific routines unchanged."
+                  value={habitDraft.routineGroupId}
+                  onChange={(event) =>
+                    setHabitDraft({
+                      ...habitDraft,
+                      routineGroupId: event.target.value,
+                    })
+                  }
+                >
+                  <option value={KEEP_ASSIGNMENT_ROUTINES}>
+                    Keep current assignment routines
+                  </option>
+                  <option value="">Other (ungrouped)</option>
+                  {routineGroups.data?.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.icon} {group.name}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setHabitEditor(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={saveHabit.isPending}
+                >
+                  {saveHabit.isPending
+                    ? 'Saving…'
+                    : habitEditor === 'new'
+                      ? 'Create habit'
+                      : 'Save this and future'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleDialog>
+      )}
+
+      {taskEditor && (
+        <AccessibleDialog
+          titleId="task-editor-heading"
+          backdropClassName="work-editor-backdrop"
+          className="work-editor-dialog"
+          onClose={() => setTaskEditor(null)}
+        >
+          <div className="work-editor-header">
+            <div>
+              <p className="eyebrow">One-off task</p>
+              <h2 id="task-editor-heading">
+                {taskEditor === 'new'
+                  ? 'Create a one-off task'
+                  : `Edit ${taskEditor.title}`}
+              </h2>
+            </div>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setTaskEditor(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="work-editor-body">
+            <form className="auth-form" onSubmit={submitTask} noValidate>
+              {formError && (
+                <div className="form-alert" role="alert">
+                  {formError}
+                </div>
+              )}
+              <SelectField
+                id="task-child"
+                label="Child"
+                value={taskDraft.childId}
+                disabled={taskEditor !== 'new'}
+                onChange={(event) =>
+                  setTaskDraft({ ...taskDraft, childId: event.target.value })
+                }
+              >
+                <option value="">Choose a child</option>
+                {children.data?.map((child) => (
+                  <option key={child.id} value={child.id}>
+                    {child.nickname}
+                  </option>
+                ))}
+              </SelectField>
+              <FormField
+                id="task-title"
+                label="Task name"
+                maxLength={120}
+                data-initial-focus
+                value={taskDraft.title}
+                onChange={(event) =>
+                  setTaskDraft({ ...taskDraft, title: event.target.value })
+                }
+              />
+              <FormField
+                id="task-description"
+                label="Description (optional)"
+                maxLength={500}
+                value={taskDraft.description}
+                onChange={(event) =>
+                  setTaskDraft({
+                    ...taskDraft,
                     description: event.target.value,
                   })
                 }
               />
-            </fieldset>
-            {habitEditor === 'new' && (
-              <>
-                <fieldset>
-                  <legend>2. Who does it?</legend>
-                  <div className="choice-grid">
-                    {children.data?.map((child) => (
-                      <label key={child.id}>
-                        <input
-                          type="checkbox"
-                          checked={habitDraft.childIds.includes(child.id)}
-                          onChange={() =>
-                            setHabitDraft({
-                              ...habitDraft,
-                              childIds: habitDraft.childIds.includes(child.id)
-                                ? habitDraft.childIds.filter(
-                                    (id) => id !== child.id,
-                                  )
-                                : [...habitDraft.childIds, child.id],
-                            })
-                          }
-                        />
-                        {child.nickname}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                <fieldset>
-                  <legend>3. Points and schedule</legend>
-                  <FormField
-                    id="habit-points"
-                    label="Points"
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={habitDraft.points}
-                    onChange={(event) =>
-                      setHabitDraft({
-                        ...habitDraft,
-                        points: event.target.value,
-                      })
-                    }
-                  />
-                  <SelectField
-                    id="habit-frequency"
-                    label="Frequency"
-                    value={habitDraft.scheduleKind}
-                    onChange={(event) =>
-                      setHabitDraft({
-                        ...habitDraft,
-                        scheduleKind: event.target
-                          .value as HabitDraft['scheduleKind'],
-                      })
-                    }
-                  >
-                    <option value="daily">Every day</option>
-                    <option value="weekdays">Selected weekdays</option>
-                  </SelectField>
-                  {habitDraft.scheduleKind === 'weekdays' && (
-                    <fieldset className="weekday-picker">
-                      <legend>Days</legend>
-                      {weekdays.map((day) => (
-                        <label key={day.value}>
-                          <input
-                            type="checkbox"
-                            checked={habitDraft.weekdays.includes(day.value)}
-                            onChange={() =>
-                              setHabitDraft({
-                                ...habitDraft,
-                                weekdays: habitDraft.weekdays.includes(
-                                  day.value,
-                                )
-                                  ? habitDraft.weekdays.filter(
-                                      (value) => value !== day.value,
-                                    )
-                                  : [...habitDraft.weekdays, day.value],
-                              })
-                            }
-                          />
-                          {day.label}
-                        </label>
-                      ))}
-                    </fieldset>
-                  )}
-                  <SelectField
-                    id="habit-routine"
-                    label="Routine group (optional)"
-                    value={habitDraft.routineGroupId}
-                    onChange={(event) =>
-                      setHabitDraft({
-                        ...habitDraft,
-                        routineGroupId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">Other (ungrouped)</option>
-                    {routineGroups.data?.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.icon} {group.name}
-                      </option>
-                    ))}
-                  </SelectField>
-                </fieldset>
-              </>
-            )}
-            <FormField
-              id="habit-effective-date"
-              label={habitEditor === 'new' ? 'Start date' : 'Effective date'}
-              type="date"
-              value={habitDraft.effectiveDate}
-              onChange={(event) =>
-                setHabitDraft({
-                  ...habitDraft,
-                  effectiveDate: event.target.value,
-                })
-              }
-            />
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => setHabitEditor(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                type="submit"
-                disabled={saveHabit.isPending}
-              >
-                {saveHabit.isPending
-                  ? 'Saving…'
-                  : habitEditor === 'new'
-                    ? 'Create habit'
-                    : 'Save this and future'}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {taskEditor && (
-        <section
-          className="editor-card work-editor"
-          aria-labelledby="task-editor-heading"
-        >
-          <h2 id="task-editor-heading">
-            {taskEditor === 'new'
-              ? 'Create a one-off task'
-              : `Edit ${taskEditor.title}`}
-          </h2>
-          <form className="auth-form" onSubmit={submitTask} noValidate>
-            {formError && (
-              <div className="form-alert" role="alert">
-                {formError}
+              <div className="form-row">
+                <FormField
+                  id="task-date"
+                  label="Due date"
+                  type="date"
+                  value={taskDraft.dueDate}
+                  onChange={(event) =>
+                    setTaskDraft({ ...taskDraft, dueDate: event.target.value })
+                  }
+                />
+                <FormField
+                  id="task-points"
+                  label="Points"
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={taskDraft.points}
+                  onChange={(event) =>
+                    setTaskDraft({ ...taskDraft, points: event.target.value })
+                  }
+                />
               </div>
-            )}
-            <SelectField
-              id="task-child"
-              label="Child"
-              value={taskDraft.childId}
-              disabled={taskEditor !== 'new'}
-              onChange={(event) =>
-                setTaskDraft({ ...taskDraft, childId: event.target.value })
-              }
-            >
-              <option value="">Choose a child</option>
-              {children.data?.map((child) => (
-                <option key={child.id} value={child.id}>
-                  {child.nickname}
-                </option>
-              ))}
-            </SelectField>
-            <FormField
-              id="task-title"
-              label="Task name"
-              maxLength={120}
-              value={taskDraft.title}
-              onChange={(event) =>
-                setTaskDraft({ ...taskDraft, title: event.target.value })
-              }
-            />
-            <FormField
-              id="task-description"
-              label="Description (optional)"
-              maxLength={500}
-              value={taskDraft.description}
-              onChange={(event) =>
-                setTaskDraft({ ...taskDraft, description: event.target.value })
-              }
-            />
-            <div className="form-row">
-              <FormField
-                id="task-date"
-                label="Due date"
-                type="date"
-                value={taskDraft.dueDate}
+              <SelectField
+                id="task-routine"
+                label="Routine group (optional)"
+                value={taskDraft.routineGroupId}
                 onChange={(event) =>
-                  setTaskDraft({ ...taskDraft, dueDate: event.target.value })
+                  setTaskDraft({
+                    ...taskDraft,
+                    routineGroupId: event.target.value,
+                  })
                 }
-              />
-              <FormField
-                id="task-points"
-                label="Points"
-                type="number"
-                min={1}
-                max={10000}
-                value={taskDraft.points}
-                onChange={(event) =>
-                  setTaskDraft({ ...taskDraft, points: event.target.value })
-                }
-              />
-            </div>
-            <SelectField
-              id="task-routine"
-              label="Routine group (optional)"
-              value={taskDraft.routineGroupId}
-              onChange={(event) =>
-                setTaskDraft({
-                  ...taskDraft,
-                  routineGroupId: event.target.value,
-                })
-              }
-            >
-              <option value="">Other (ungrouped)</option>
-              {routineGroups.data?.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.icon} {group.name}
-                </option>
-              ))}
-            </SelectField>
-            <p className="helper-inline">
-              If it is not finished by its due date, it will stay visible as
-              overdue.
-            </p>
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => setTaskEditor(null)}
               >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                type="submit"
-                disabled={saveTask.isPending}
-              >
-                {saveTask.isPending
-                  ? 'Saving…'
-                  : taskEditor === 'new'
-                    ? 'Create task'
-                    : 'Save task'}
-              </button>
-            </div>
-          </form>
-        </section>
+                <option value="">Other (ungrouped)</option>
+                {routineGroups.data?.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.icon} {group.name}
+                  </option>
+                ))}
+              </SelectField>
+              <p className="helper-inline">
+                If it is not finished by its due date, it will stay visible as
+                overdue.
+              </p>
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setTaskEditor(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={saveTask.isPending}
+                >
+                  {saveTask.isPending
+                    ? 'Saving…'
+                    : taskEditor === 'new'
+                      ? 'Create task'
+                      : 'Save task'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleDialog>
       )}
 
       {assignmentEditor && (
-        <section
-          className="editor-card work-editor"
-          aria-labelledby="assignment-editor-heading"
+        <AccessibleDialog
+          titleId="assignment-editor-heading"
+          backdropClassName="work-editor-backdrop"
+          className="work-editor-dialog"
+          onClose={() => setAssignmentEditor(null)}
         >
-          <h2 id="assignment-editor-heading">
-            Edit {childName(children.data ?? [], assignmentEditor.childId)}’s
-            assignment
-          </h2>
-          <div className="future-notice">
-            <strong>This and future dates</strong>
-            <p>
-              Points and schedule change from the effective date. Earlier
-              occurrences keep their original values.
-            </p>
-          </div>
-          <form className="auth-form" onSubmit={submitAssignment} noValidate>
-            {formError && (
-              <div className="form-alert" role="alert">
-                {formError}
-              </div>
-            )}
-            <FormField
-              id="assignment-points"
-              label="Points"
-              type="number"
-              min={1}
-              max={10000}
-              value={habitDraft.points}
-              onChange={(event) =>
-                setHabitDraft({ ...habitDraft, points: event.target.value })
-              }
-            />
-            <SelectField
-              id="assignment-frequency"
-              label="Frequency"
-              value={habitDraft.scheduleKind}
-              onChange={(event) =>
-                setHabitDraft({
-                  ...habitDraft,
-                  scheduleKind: event.target
-                    .value as HabitDraft['scheduleKind'],
-                })
-              }
-            >
-              <option value="daily">Every day</option>
-              <option value="weekdays">Selected weekdays</option>
-            </SelectField>
-            {habitDraft.scheduleKind === 'weekdays' && (
-              <fieldset className="weekday-picker">
-                <legend>Days</legend>
-                {weekdays.map((day) => (
-                  <label key={day.value}>
-                    <input
-                      type="checkbox"
-                      checked={habitDraft.weekdays.includes(day.value)}
-                      onChange={() =>
-                        setHabitDraft({
-                          ...habitDraft,
-                          weekdays: habitDraft.weekdays.includes(day.value)
-                            ? habitDraft.weekdays.filter(
-                                (value) => value !== day.value,
-                              )
-                            : [...habitDraft.weekdays, day.value],
-                        })
-                      }
-                    />
-                    {day.label}
-                  </label>
-                ))}
-              </fieldset>
-            )}
-            <SelectField
-              id="assignment-routine"
-              label="Routine group"
-              value={habitDraft.routineGroupId}
-              onChange={(event) =>
-                setHabitDraft({
-                  ...habitDraft,
-                  routineGroupId: event.target.value,
-                })
-              }
-            >
-              <option value="">Other (ungrouped)</option>
-              {routineGroups.data?.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.icon} {group.name}
-                </option>
-              ))}
-            </SelectField>
-            <FormField
-              id="assignment-effective-date"
-              label="Effective date"
-              type="date"
-              value={habitDraft.effectiveDate}
-              onChange={(event) =>
-                setHabitDraft({
-                  ...habitDraft,
-                  effectiveDate: event.target.value,
-                })
-              }
-            />
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => setAssignmentEditor(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                type="submit"
-                disabled={saveAssignment.isPending}
-              >
-                {saveAssignment.isPending ? 'Saving…' : 'Save this and future'}
-              </button>
+          <div className="work-editor-header">
+            <div>
+              <p className="eyebrow">Assignment</p>
+              <h2 id="assignment-editor-heading">
+                {`Edit ${childName(children.data ?? [], assignmentEditor.childId)}’s assignment`}
+              </h2>
             </div>
-          </form>
-        </section>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setAssignmentEditor(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="work-editor-body">
+            <div className="future-notice">
+              <strong>This and future dates</strong>
+              <p>
+                Points, schedule, and routine change from the effective date.
+                Earlier occurrences keep their original values.
+              </p>
+            </div>
+            <form className="auth-form" onSubmit={submitAssignment} noValidate>
+              {formError && (
+                <div className="form-alert" role="alert">
+                  {formError}
+                </div>
+              )}
+              <FormField
+                id="assignment-points"
+                label="Points"
+                type="number"
+                data-initial-focus
+                min={1}
+                max={10000}
+                value={habitDraft.points}
+                onChange={(event) =>
+                  setHabitDraft({ ...habitDraft, points: event.target.value })
+                }
+              />
+              <SelectField
+                id="assignment-frequency"
+                label="Frequency"
+                value={habitDraft.scheduleKind}
+                onChange={(event) =>
+                  setHabitDraft({
+                    ...habitDraft,
+                    scheduleKind: event.target
+                      .value as HabitDraft['scheduleKind'],
+                  })
+                }
+              >
+                <option value="daily">Every day</option>
+                <option value="weekdays">Selected weekdays</option>
+              </SelectField>
+              {habitDraft.scheduleKind === 'weekdays' && (
+                <fieldset className="weekday-picker">
+                  <legend>Days</legend>
+                  {weekdays.map((day) => (
+                    <label key={day.value}>
+                      <input
+                        type="checkbox"
+                        checked={habitDraft.weekdays.includes(day.value)}
+                        onChange={() =>
+                          setHabitDraft({
+                            ...habitDraft,
+                            weekdays: habitDraft.weekdays.includes(day.value)
+                              ? habitDraft.weekdays.filter(
+                                  (value) => value !== day.value,
+                                )
+                              : [...habitDraft.weekdays, day.value],
+                          })
+                        }
+                      />
+                      {day.label}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+              <SelectField
+                id="assignment-routine"
+                label="Routine group"
+                value={habitDraft.routineGroupId}
+                onChange={(event) =>
+                  setHabitDraft({
+                    ...habitDraft,
+                    routineGroupId: event.target.value,
+                  })
+                }
+              >
+                <option value="">Other (ungrouped)</option>
+                {routineGroups.data?.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.icon} {group.name}
+                  </option>
+                ))}
+              </SelectField>
+              <FormField
+                id="assignment-effective-date"
+                label="Effective date"
+                type="date"
+                value={habitDraft.effectiveDate}
+                onChange={(event) =>
+                  setHabitDraft({
+                    ...habitDraft,
+                    effectiveDate: event.target.value,
+                  })
+                }
+              />
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setAssignmentEditor(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={saveAssignment.isPending}
+                >
+                  {saveAssignment.isPending
+                    ? 'Saving…'
+                    : 'Save this and future'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleDialog>
       )}
 
       {confirm && (

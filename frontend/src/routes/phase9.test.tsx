@@ -101,6 +101,43 @@ describe('Phase 9 routines and rewards', () => {
     ]);
   });
 
+  it('lets parents choose suggested routine icons or enter a custom icon', async () => {
+    const user = userEvent.setup();
+    vi.mocked(routineGroupsApi.create).mockResolvedValue({
+      id: 'after-school',
+      name: 'After school',
+      icon: '☀',
+      color: '#f9ee71',
+      startsAtLocal: '05:00',
+      endsAtLocal: '11:59',
+      sortOrder: 2,
+      version: 1,
+      archivedAt: null,
+    });
+    renderPage(<RoutineGroups />);
+
+    await user.click(await screen.findByRole('button', { name: 'New group' }));
+    await user.type(screen.getByLabelText('Name'), 'Morning Routine');
+    await user.click(screen.getByRole('button', { name: 'Use 🪥 icon' }));
+    expect(screen.getByRole('button', { name: 'Use 🪥 icon' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.clear(screen.getByLabelText('Custom icon'));
+    await user.type(screen.getByLabelText('Custom icon'), '☀');
+    await user.click(screen.getByRole('button', { name: 'Save group' }));
+
+    await waitFor(() =>
+      expect(routineGroupsApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Morning Routine',
+          icon: '☀',
+        }),
+        expect.any(String),
+      ),
+    );
+  });
+
   it('shows exact signed redemption arithmetic and prevents duplicate activation', async () => {
     const user = userEvent.setup();
     let resolve!: (

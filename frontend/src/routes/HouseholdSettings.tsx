@@ -1,7 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { HouseholdUpdate, householdApi } from '../api/client';
+import {
+  HouseholdUpdate,
+  householdApi,
+  weekStartOptions,
+  type WeekStart,
+} from '../api/client';
 import { messageForError } from '../api/errors';
 import { messages } from '../content/messages';
 
@@ -161,18 +166,21 @@ export function HouseholdSettings() {
           </label>
         </fieldset>
         <label className="form-field">
-          Week starts on
+          Period starts on
           <select
             value={form.weekStartsOn ?? 'monday'}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
-                weekStartsOn: event.target.value as 'sunday' | 'monday',
+                weekStartsOn: event.target.value as WeekStart,
               }))
             }
           >
-            <option value="monday">Monday</option>
-            <option value="sunday">Sunday</option>
+            {weekStartOptions.map((day) => (
+              <option key={day.value} value={day.value}>
+                {day.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="form-field">

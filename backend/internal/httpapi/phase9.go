@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 func (a *authAPI) phase9Routes(m *http.ServeMux) {
@@ -206,9 +207,17 @@ func routineIssues(b routineBody) []validationIssue {
 	return o
 }
 
-var phase9Icons = map[string]bool{"": true, "🌅": true, "☀️": true, "🏫": true, "🌆": true, "🌙": true, "⭐": true, "🎁": true, "🍦": true, "🎮": true, "🎬": true, "📚": true, "🚲": true, "🍕": true, "🎨": true, "⚽": true}
-
-func safePhase9Icon(v string) bool { return phase9Icons[v] }
+func safePhase9Icon(v string) bool {
+	if len([]rune(v)) > 40 {
+		return false
+	}
+	for _, r := range v {
+		if r == '<' || r == '>' || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
 func phase9Key(r *http.Request) (string, []validationIssue) {
 	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if len(k) < 8 || len(k) > 128 {
@@ -240,6 +249,7 @@ func (a *authAPI) createRoutineGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.Name = strings.TrimSpace(b.Name)
+	b.Icon = strings.TrimSpace(b.Icon)
 	is := routineIssues(b)
 	k, ki := phase9Key(r)
 	is = append(is, ki...)
@@ -269,8 +279,14 @@ func (a *authAPI) updateRoutineGroup(w http.ResponseWriter, r *http.Request) {
 			is = append(is, validationIssue{"name", "length", "Name must be 1–60 characters."})
 		}
 	}
-	if b.Icon.Set && b.Icon.Value != nil && len([]rune(*b.Icon.Value)) > 40 {
-		is = append(is, validationIssue{"icon", "length", "Icon must be at most 40 characters."})
+	if b.Icon.Set && b.Icon.Value != nil {
+		*b.Icon.Value = strings.TrimSpace(*b.Icon.Value)
+		if len([]rune(*b.Icon.Value)) > 40 {
+			is = append(is, validationIssue{"icon", "length", "Icon must be at most 40 characters."})
+		}
+		if !safePhase9Icon(*b.Icon.Value) {
+			is = append(is, validationIssue{"icon", "invalid", "Use a short text or emoji icon without markup or control characters."})
+		}
 	}
 	if b.Color.Set && b.Color.Value != nil && !colorPattern.MatchString(*b.Color.Value) {
 		is = append(is, validationIssue{"color", "invalid", "Use a six-digit hex color."})
@@ -469,6 +485,7 @@ func (a *authAPI) createReward(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &b) {
 		return
 	}
+	b.Icon = strings.TrimSpace(b.Icon)
 	is := rewardIssues(b)
 	k, ki := phase9Key(r)
 	is = append(is, ki...)
@@ -491,6 +508,7 @@ func (a *authAPI) updateReward(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &b) {
 		return
 	}
+	b.Icon = strings.TrimSpace(b.Icon)
 	is := rewardIssues(b)
 	k, ki := phase9Key(r)
 	is = append(is, ki...)

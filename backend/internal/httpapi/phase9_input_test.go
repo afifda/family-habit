@@ -46,3 +46,16 @@ func TestRoutineMembershipTriStateAndArchiveDestinationPresence(t *testing.T) {
 		t.Fatal("explicit null archive destination must mean Other")
 	}
 }
+
+func TestPhase9IconValidationAllowsCustomShortText(t *testing.T) {
+	for _, icon := range []string{"", "☀", "Morning", "🪥"} {
+		if !safePhase9Icon(icon) {
+			t.Fatalf("expected %q to be a valid icon", icon)
+		}
+	}
+	for _, icon := range []string{"<b>", "line\nbreak"} {
+		if safePhase9Icon(icon) {
+			t.Fatalf("expected %q to be rejected", icon)
+		}
+	}
+}

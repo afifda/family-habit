@@ -14,12 +14,31 @@ export type Session = {
 
 type SessionResponse = { data: Session };
 
+export type WeekStart =
+  | 'sunday'
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday';
+
+export const weekStartOptions: Array<{ value: WeekStart; label: string }> = [
+  { value: 'sunday', label: 'Sunday' },
+  { value: 'monday', label: 'Monday' },
+  { value: 'tuesday', label: 'Tuesday' },
+  { value: 'wednesday', label: 'Wednesday' },
+  { value: 'thursday', label: 'Thursday' },
+  { value: 'friday', label: 'Friday' },
+  { value: 'saturday', label: 'Saturday' },
+];
+
 export type RegisterInput = {
   email: string;
   password: string;
   householdName: string;
   timezone: string;
-  weekStartsOn: 'sunday' | 'monday';
+  weekStartsOn: WeekStart;
 };
 
 export type LoginInput = Pick<RegisterInput, 'email' | 'password'>;
@@ -28,7 +47,7 @@ export type Household = {
   id: string;
   name: string;
   timezone: string;
-  weekStartsOn: 'sunday' | 'monday';
+  weekStartsOn: WeekStart;
   parentModeTimeoutMinutes: 5 | 15 | 30;
   rewardsEnabled?: boolean;
   version: number;
@@ -179,6 +198,12 @@ export const householdApi = {
 export const overviewApi = {
   async get() {
     return (await request<{ data: ParentOverview }>('/parent/overview')).data;
+  },
+};
+
+export const profileSummaryApi = {
+  async get() {
+    return (await request<{ data: ParentOverview }>('/profiles/summary')).data;
   },
 };
 
@@ -683,7 +708,7 @@ export type ChildReport = {
   pointsRedeemed?: number;
   pointsRefunded?: number;
   netPointsChange: number;
-  weekStartsOn: 0 | 1;
+  weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6;
 };
 
 export type ApiPage<T> = {

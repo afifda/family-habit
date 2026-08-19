@@ -107,10 +107,7 @@ func periodBounds(date time.Time, period string, weekStart int) (time.Time, time
 		start := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, d.Location())
 		return start, start.AddDate(0, 1, -1)
 	default:
-		wanted := time.Sunday
-		if weekStart == 1 {
-			wanted = time.Monday
-		}
+		wanted := time.Weekday(weekStart % 7)
 		delta := (7 + int(d.Weekday()) - int(wanted)) % 7
 		start := d.AddDate(0, 0, -delta)
 		return start, start.AddDate(0, 0, 6)

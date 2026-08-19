@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
-import { overviewApi, profilesApi, type Profile } from '../api/client';
+import { profileSummaryApi, profilesApi, type Profile } from '../api/client';
 import { messageForError } from '../api/errors';
 import { useAuth } from '../auth/AuthProvider';
 import { ChildAvatar } from '../components/ChildAvatar';
@@ -22,9 +22,9 @@ export function ProfilePicker() {
     enabled: Boolean(session),
   });
   const overview = useQuery({
-    queryKey: ['parent', 'overview', 'profile-picker'],
-    queryFn: () => overviewApi.get(),
-    enabled: session?.actor === 'parent' && session.parentMode,
+    queryKey: ['profiles', 'summary'],
+    queryFn: () => profileSummaryApi.get(),
+    enabled: Boolean(session) && session?.actor !== 'child',
   });
 
   if (loading)

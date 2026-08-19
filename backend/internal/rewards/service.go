@@ -6,6 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
+	"unicode"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
@@ -28,7 +31,18 @@ var (
 	ErrEligibilityExpired  = errors.New("reward eligibility expired")
 	ErrRedemptionLimit     = errors.New("reward redemption limit reached")
 )
-var allowedIcons = map[string]bool{"": true, "🌅": true, "☀️": true, "🏫": true, "🌆": true, "🌙": true, "⭐": true, "🎁": true, "🍦": true, "🎮": true, "🎬": true, "📚": true, "🚲": true, "🍕": true, "🎨": true, "⚽": true}
+
+func safeIcon(v string) bool {
+	if len([]rune(v)) > 40 {
+		return false
+	}
+	for _, r := range v {
+		if r == '<' || r == '>' || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
 
 type Service struct {
 	pool *pgxpool.Pool
@@ -187,7 +201,8 @@ func replaceEligibility(c context.Context, t pgx.Tx, f, reward, scope string, id
 	return nil
 }
 func (s *Service) Create(c context.Context, sid, f, k string, h []byte, in RewardInput) (Reward, bool, error) {
-	if !allowedIcons[in.Icon] {
+	in.Icon = strings.TrimSpace(in.Icon)
+	if !safeIcon(in.Icon) {
 		return Reward{}, false, ErrValidation
 	}
 	tx, e := s.pool.Begin(c)
@@ -225,7 +240,8 @@ func (s *Service) Create(c context.Context, sid, f, k string, h []byte, in Rewar
 	return r, false, tx.Commit(c)
 }
 func (s *Service) Update(c context.Context, sid, f, id, k string, h []byte, v int64, in RewardInput) (Reward, bool, error) {
-	if !allowedIcons[in.Icon] {
+	in.Icon = strings.TrimSpace(in.Icon)
+	if !safeIcon(in.Icon) {
 		return Reward{}, false, ErrValidation
 	}
 	tx, e := s.pool.Begin(c)

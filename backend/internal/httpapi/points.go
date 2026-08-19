@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/family-habit/family-habit/backend/internal/auth"
 	"github.com/family-habit/family-habit/backend/internal/points"
 )
 
 func (a *authAPI) pointRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/parent/overview", a.requireParent(http.HandlerFunc(a.parentOverview)))
+	mux.Handle("GET /api/v1/profiles/summary", a.requireSession(http.HandlerFunc(a.profileSummary)))
 	mux.Handle("GET /api/v1/review/pending", a.requireParent(http.HandlerFunc(a.pendingReview)))
 	mux.Handle("POST /api/v1/completions/{completionId}/approve", a.requireParent(a.csrf(http.HandlerFunc(a.approveCompletion))))
 	mux.Handle("POST /api/v1/completions/{completionId}/reject", a.requireParent(a.csrf(http.HandlerFunc(a.rejectCompletion))))
@@ -27,8 +29,30 @@ func (a *authAPI) pointRoutes(mux *http.ServeMux) {
 
 func (a *authAPI) parentOverview(w http.ResponseWriter, r *http.Request) {
 	s := sessionFrom(r.Context())
+	a.writeProfileSummary(w, r, s)
+}
+
+func (a *authAPI) profileSummary(w http.ResponseWriter, r *http.Request) {
+	s := sessionFrom(r.Context())
+	if s.Mode == "child" {
+		writeError(w, 403, "profile_picker_required", "Leave the child profile to view family profiles.")
+		return
+	}
+	a.writeProfileSummary(w, r, s)
+}
+
+func (a *authAPI) writeProfileSummary(w http.ResponseWriter, r *http.Request, s auth.Session) {
 	date, timezone, err := a.completions.HouseholdToday(r.Context(), s.FamilyID)
 	if err != nil {
+		writeError(w, 500, "internal_error", "The request could not be completed.")
+		return
+	}
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		writeError(w, 500, "internal_error", "The request could not be completed.")
+		return
+	}
+	if err = a.habits.EnsureDate(r.Context(), s.FamilyID, parsedDate); err != nil {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
 	}
@@ -40,31 +64,28 @@ func (a *authAPI) parentOverview(w http.ResponseWriter, r *http.Request) {
 	items := make([]any, 0, len(profiles))
 	pendingTotal := 0
 	for _, child := range profiles {
-		today, todayErr := a.completions.Today(r.Context(), s.ID, s.FamilyID, child.ID, date)
-		if todayErr != nil {
-			writeError(w, 500, "internal_error", "The request could not be completed.")
-			return
-		}
 		completed, pending := 0, 0
 		approvedPoints, waitingPoints := int64(0), int64(0)
-		for _, occurrence := range today.Occurrences {
-			if occurrence.Group == "done" {
-				completed++
-				if occurrence.LocalDate == date {
-					approvedPoints += occurrence.Points
-				}
-			}
-			if occurrence.Group == "waiting_for_parent" {
-				pending++
-				if occurrence.LocalDate == date {
-					waitingPoints += occurrence.Points
-				}
-			}
+		var total int
+		err = a.pool.QueryRow(r.Context(), `SELECT
+			count(*) FILTER (WHERE state NOT IN ('approval_reversed','cancelled')),
+			count(*) FILTER (WHERE state='approved'),
+			count(*) FILTER (WHERE state='pending_approval'),
+			coalesce(sum(points_snapshot) FILTER (WHERE state='approved' AND local_date=$3),0),
+			coalesce(sum(points_snapshot) FILTER (WHERE state='pending_approval' AND local_date=$3),0)
+			FROM occurrences
+			WHERE family_id=$1 AND child_id=$2 AND (
+				local_date=$3 OR
+				(source_type='task' AND local_date<$3 AND state IN ('not_started','pending_approval'))
+			)`, s.FamilyID, child.ID, parsedDate).Scan(&total, &completed, &pending, &approvedPoints, &waitingPoints)
+		if err != nil {
+			writeError(w, 500, "internal_error", "The request could not be completed.")
+			return
 		}
 		pendingTotal += pending
 		items = append(items, map[string]any{
 			"childId": child.ID, "nickname": child.Nickname, "avatar": child.Avatar, "color": child.Color,
-			"completed": completed, "total": len(today.Occurrences), "pending": pending,
+			"completed": completed, "total": total, "pending": pending,
 			"approvedPointsToday": approvedPoints, "waitingPointsToday": waitingPoints,
 		})
 	}

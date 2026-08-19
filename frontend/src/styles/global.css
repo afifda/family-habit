@@ -551,6 +551,53 @@ button:disabled {
   gap: var(--space-4);
 }
 
+.icon-picker {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  border: 0;
+}
+
+.icon-picker legend {
+  margin-bottom: var(--space-2);
+  font-weight: 800;
+}
+
+.icon-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+  gap: var(--space-2);
+}
+
+.icon-choice {
+  width: 100%;
+  aspect-ratio: 1;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.icon-choice:hover,
+.icon-choice:focus-visible {
+  border-color: var(--color-brand);
+}
+
+.icon-choice.is-selected {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 24%, transparent);
+}
+
+.icon-custom-field {
+  gap: var(--space-2);
+}
+
 .form-actions > * {
   flex: 1;
 }
@@ -965,7 +1012,59 @@ h2 {
   max-width: 42rem;
 }
 
-.work-editor fieldset {
+.work-editor-backdrop {
+  padding: var(--space-5);
+}
+
+.work-editor-dialog {
+  width: min(100%, 58rem);
+  max-height: min(52rem, calc(100dvh - 2.5rem));
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.work-editor-header {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.work-editor-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.work-editor-body {
+  min-height: 0;
+  padding: var(--space-5) var(--space-6) 0;
+  overflow-y: auto;
+}
+
+.work-editor-dialog .auth-form {
+  max-width: none;
+}
+
+.work-editor-dialog .form-actions {
+  position: sticky;
+  bottom: 0;
+  margin-inline: calc(var(--space-6) * -1);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 92%),
+    var(--color-surface) 30%
+  );
+}
+
+.work-editor fieldset,
+.work-editor-dialog fieldset {
   margin: 0;
   padding: var(--space-4);
   display: grid;
@@ -974,7 +1073,8 @@ h2 {
   border-radius: var(--radius-sm);
 }
 
-.work-editor legend {
+.work-editor legend,
+.work-editor-dialog legend {
   padding-inline: var(--space-2);
   font-weight: 800;
 }
@@ -1115,6 +1215,30 @@ h2 {
 }
 
 @media (max-width: 40rem) {
+  .work-editor-backdrop {
+    padding: var(--space-3) 0 0;
+    place-items: end center;
+  }
+
+  .work-editor-dialog {
+    width: 100%;
+    max-height: calc(100dvh - var(--space-3));
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .work-editor-header {
+    padding: var(--space-4);
+  }
+
+  .work-editor-body {
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .work-editor-dialog .form-actions {
+    margin-inline: calc(var(--space-4) * -1);
+    padding: var(--space-3) var(--space-4);
+  }
+
   .page-heading-row,
   .child-admin-card {
     align-items: stretch;

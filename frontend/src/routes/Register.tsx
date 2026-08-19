@@ -5,6 +5,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { ApiError } from '../api/errors';
+import { weekStartOptions } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import { AuthLayout } from '../components/AuthLayout';
 import { FormField, SelectField } from '../components/FormField';
@@ -14,7 +15,15 @@ const schema = z.object({
   password: z.string().min(12, 'Use at least 12 characters.').max(128),
   householdName: z.string().trim().min(1, 'Enter a household name.').max(80),
   timezone: z.string().min(1, 'Choose a timezone.'),
-  weekStartsOn: z.enum(['sunday', 'monday']),
+  weekStartsOn: z.enum([
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ]),
 });
 type Values = z.infer<typeof schema>;
 
@@ -158,12 +167,15 @@ export function Register() {
               </SelectField>
               <SelectField
                 id="weekStartsOn"
-                label="Week starts on"
+                label="Period starts on"
                 error={errors.weekStartsOn?.message}
                 {...register('weekStartsOn')}
               >
-                <option value="sunday">Sunday</option>
-                <option value="monday">Monday</option>
+                {weekStartOptions.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
               </SelectField>
             </div>
             <div className="form-actions">

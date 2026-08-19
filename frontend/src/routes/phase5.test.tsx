@@ -82,6 +82,15 @@ const task: OneOffTask = {
   createdAt: '2026-08-01T00:00:00Z',
 };
 
+const morningRoutine = {
+  id: 'routine-1',
+  name: 'Morning',
+  icon: '🌅',
+  color: '#F5B94C',
+  sortOrder: 0,
+  version: 1,
+};
+
 function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -203,6 +212,89 @@ describe('Phase 5 habit and task management', () => {
           effectiveDate,
         }),
       ),
+    );
+  });
+
+  it('moves every active habit assignment when a parent-level routine is selected', async () => {
+    const assignments = [
+      {
+        id: 'assignment-1',
+        habitId: habit.id,
+        childId: 'child-1',
+        points: 10,
+        schedule: { kind: 'daily' as const },
+        effectiveStartDate: '2026-08-09',
+        routineGroupId: null,
+        sortOrder: 2,
+        active: true,
+        version: 4,
+      },
+      {
+        id: 'assignment-2',
+        habitId: habit.id,
+        childId: 'child-2',
+        points: 15,
+        schedule: {
+          kind: 'weekdays' as const,
+          weekdays: ['monday' as const, 'friday' as const],
+        },
+        effectiveStartDate: '2026-08-09',
+        routineGroupId: null,
+        sortOrder: 5,
+        active: true,
+        version: 6,
+      },
+    ];
+    vi.mocked(routineGroupsApi.list).mockResolvedValue([morningRoutine]);
+    vi.mocked(habitsApi.list).mockResolvedValue([
+      { ...habit, assignments, version: 3 },
+    ]);
+    vi.mocked(habitsApi.update).mockResolvedValue(habit);
+    vi.mocked(habitsApi.updateAssignment).mockImplementation((id, input) =>
+      Promise.resolve({
+        ...assignments.find((assignment) => assignment.id === id)!,
+        ...input,
+      }),
+    );
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.selectOptions(
+      screen.getByLabelText('Routine group for all assignments'),
+      morningRoutine.id,
+    );
+    const effectiveDate =
+      screen.getByLabelText<HTMLInputElement>('Effective date').value;
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save this and future' }),
+    );
+
+    await waitFor(() =>
+      expect(habitsApi.updateAssignment).toHaveBeenCalledTimes(2),
+    );
+    expect(habitsApi.updateAssignment).toHaveBeenNthCalledWith(
+      1,
+      'assignment-1',
+      {
+        points: 10,
+        schedule: { kind: 'daily' },
+        effectiveDate,
+        routineGroupId: morningRoutine.id,
+        sortOrder: 2,
+      },
+      4,
+    );
+    expect(habitsApi.updateAssignment).toHaveBeenNthCalledWith(
+      2,
+      'assignment-2',
+      {
+        points: 15,
+        schedule: { kind: 'weekdays', weekdays: ['monday', 'friday'] },
+        effectiveDate,
+        routineGroupId: morningRoutine.id,
+        sortOrder: 5,
+      },
+      6,
     );
   });
 

@@ -835,7 +835,7 @@ components:
         password: { type: string, format: password, minLength: 12, maxLength: 128 }
         householdName: { type: string, minLength: 1, maxLength: 80 }
         timezone: { type: string, examples: [Asia/Jakarta], description: IANA timezone name. }
-        weekStartsOn: { type: string, enum: [sunday, monday], default: sunday }
+        weekStartsOn: { type: string, enum: [sunday, monday, tuesday, wednesday, thursday, friday, saturday], default: sunday }
     LoginInput:
       type: object
       required: [email, password]
@@ -883,7 +883,7 @@ components:
         id: { $ref: '#/components/schemas/UUID' }
         name: { type: string }
         timezone: { type: string, examples: [Asia/Jakarta] }
-        weekStartsOn: { type: string, enum: [sunday, monday] }
+        weekStartsOn: { type: string, enum: [sunday, monday, tuesday, wednesday, thursday, friday, saturday] }
         parentModeTimeoutMinutes: { type: integer, enum: [5, 15, 30] }
         rewardsEnabled: { type: boolean }
         version: { type: integer, format: int64, minimum: 1 }
@@ -893,7 +893,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         timezone: { type: string }
-        weekStartsOn: { type: string, enum: [sunday, monday] }
+        weekStartsOn: { type: string, enum: [sunday, monday, tuesday, wednesday, thursday, friday, saturday] }
         parentModeTimeoutMinutes: { type: integer, enum: [5, 15, 30] }
         parentPin: { type: [string, 'null'], pattern: '^\\d{6}$', description: Null removes the PIN. }
         rewardsEnabled: { type: boolean, description: Requires Idempotency-Key and If-Match. }
@@ -1187,7 +1187,7 @@ components:
         startDate: { $ref: '#/components/schemas/LocalDate' }
         endDate: { $ref: '#/components/schemas/LocalDate' }
         timezone: { type: string }
-        weekStartsOn: { type: integer, enum: [0, 1] }
+        weekStartsOn: { type: integer, enum: [0, 1, 2, 3, 4, 5, 6] }
         assigned: { type: integer, minimum: 0 }
         pending: { type: integer, minimum: 0 }
         submitted: { type: integer, minimum: 0 }
