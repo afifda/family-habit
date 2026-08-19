@@ -466,6 +466,7 @@ button:disabled {
 .header-actions,
 .form-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -549,6 +550,10 @@ button:disabled {
 .form-row {
   display: grid;
   gap: var(--space-4);
+}
+
+.form-row > * {
+  min-width: 0;
 }
 
 .icon-picker {
@@ -1035,15 +1040,25 @@ h2 {
   background: var(--color-surface);
 }
 
+.work-editor-header > div {
+  min-width: 0;
+}
+
 .work-editor-header h2 {
   margin: 0;
   font-size: 1.6rem;
+  overflow-wrap: anywhere;
+}
+
+.work-editor-header .text-button {
+  flex: 0 0 auto;
 }
 
 .work-editor-body {
   min-height: 0;
   padding: var(--space-5) var(--space-6) 0;
   overflow-y: auto;
+  scroll-padding-bottom: 6rem;
 }
 
 .work-editor-dialog .auth-form {
@@ -1053,6 +1068,7 @@ h2 {
 .work-editor-dialog .form-actions {
   position: sticky;
   bottom: 0;
+  z-index: 1;
   margin-inline: calc(var(--space-6) * -1);
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--color-border);
@@ -1061,6 +1077,12 @@ h2 {
     rgb(255 255 255 / 92%),
     var(--color-surface) 30%
   );
+}
+
+.work-editor-dialog .form-actions .button {
+  min-width: min(100%, 12rem);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .work-editor fieldset,
@@ -1228,6 +1250,8 @@ h2 {
 
   .work-editor-header {
     padding: var(--space-4);
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .work-editor-body {
@@ -1237,6 +1261,10 @@ h2 {
   .work-editor-dialog .form-actions {
     margin-inline: calc(var(--space-4) * -1);
     padding: var(--space-3) var(--space-4);
+  }
+
+  .work-editor-dialog .form-actions .button {
+    width: 100%;
   }
 
   .page-heading-row,

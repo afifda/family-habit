@@ -165,7 +165,7 @@ export function HabitsTasks() {
                 {
                   points: assignment.points,
                   schedule: assignment.schedule,
-                  effectiveDate: habitDraft.effectiveDate,
+                  effectiveDate: assignment.effectiveStartDate,
                   routineGroupId: habitDraft.routineGroupId || null,
                   sortOrder: assignment.sortOrder ?? 0,
                 },

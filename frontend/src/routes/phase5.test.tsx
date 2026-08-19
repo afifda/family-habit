@@ -263,8 +263,6 @@ describe('Phase 5 habit and task management', () => {
       screen.getByLabelText('Routine group for all assignments'),
       morningRoutine.id,
     );
-    const effectiveDate =
-      screen.getByLabelText<HTMLInputElement>('Effective date').value;
     await userEvent.click(
       screen.getByRole('button', { name: 'Save this and future' }),
     );
@@ -272,13 +270,14 @@ describe('Phase 5 habit and task management', () => {
     await waitFor(() =>
       expect(habitsApi.updateAssignment).toHaveBeenCalledTimes(2),
     );
+    expect(habitsApi.assign).not.toHaveBeenCalled();
     expect(habitsApi.updateAssignment).toHaveBeenNthCalledWith(
       1,
       'assignment-1',
       {
         points: 10,
         schedule: { kind: 'daily' },
-        effectiveDate,
+        effectiveDate: '2026-08-09',
         routineGroupId: morningRoutine.id,
         sortOrder: 2,
       },
@@ -290,7 +289,7 @@ describe('Phase 5 habit and task management', () => {
       {
         points: 15,
         schedule: { kind: 'weekdays', weekdays: ['monday', 'friday'] },
-        effectiveDate,
+        effectiveDate: '2026-08-09',
         routineGroupId: morningRoutine.id,
         sortOrder: 5,
       },
