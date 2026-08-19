@@ -7,6 +7,7 @@ import {
   type RoutineGroupInput,
 } from '../api/client';
 import { messageForError } from '../api/errors';
+import { AccessibleDialog } from '../components/AccessibleDialog';
 
 const empty: RoutineGroupInput = {
   name: '',
@@ -233,98 +234,137 @@ export function RoutineGroups() {
         </ol>
       )}
       {editing && (
-        <form className="card settings-form" onSubmit={submit}>
-          <h2>
-            {editing === 'new'
-              ? 'Create routine group'
-              : `Edit ${editing.name}`}
-          </h2>
-          <label className="form-field">
-            Name
-            <input
-              autoFocus
-              required
-              maxLength={60}
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-          </label>
-          <div className="form-row">
-            <fieldset className="icon-picker">
-              <legend>Icon</legend>
-              <div className="icon-choice-grid">
-                {routineIconChoices.map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    className={
-                      draft.icon === icon
-                        ? 'icon-choice is-selected'
-                        : 'icon-choice'
-                    }
-                    aria-label={`Use ${icon} icon`}
-                    aria-pressed={draft.icon === icon}
-                    onClick={() => setDraft({ ...draft, icon })}
-                  >
-                    {icon}
-                  </button>
-                ))}
-              </div>
-              <label className="form-field icon-custom-field">
-                Custom icon
-                <input
-                  maxLength={40}
-                  value={draft.icon ?? ''}
-                  onChange={(e) =>
-                    setDraft({ ...draft, icon: e.target.value })
-                  }
-                />
-              </label>
-            </fieldset>
-            <label className="form-field">
-              Color
-              <input
-                type="color"
-                value={draft.color}
-                onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-              />
-            </label>
-          </div>
-          <div className="form-row">
-            <label className="form-field">
-              Starts (optional)
-              <input
-                type="time"
-                value={draft.startsAtLocal ?? ''}
-                onChange={(e) =>
-                  setDraft({ ...draft, startsAtLocal: e.target.value || null })
-                }
-              />
-            </label>
-            <label className="form-field">
-              Ends (optional)
-              <input
-                type="time"
-                value={draft.endsAtLocal ?? ''}
-                onChange={(e) =>
-                  setDraft({ ...draft, endsAtLocal: e.target.value || null })
-                }
-              />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button className="button button-primary" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save group'}
-            </button>
+        <AccessibleDialog
+          titleId="routine-editor-heading"
+          backdropClassName="work-editor-backdrop"
+          className="work-editor-dialog"
+          onClose={() => setEditing(null)}
+        >
+          <div className="work-editor-header">
+            <div>
+              <p className="eyebrow">Routine group</p>
+              <h2 id="routine-editor-heading">
+                {editing === 'new'
+                  ? 'Create routine group'
+                  : `Edit ${editing.name}`}
+              </h2>
+            </div>
             <button
-              className="button button-secondary"
+              className="text-button"
               type="button"
               onClick={() => setEditing(null)}
             >
-              Cancel
+              Close
             </button>
           </div>
-        </form>
+          <div className="work-editor-body">
+            <form className="auth-form" onSubmit={submit}>
+              {error && (
+                <div className="form-alert" role="alert">
+                  {error}
+                </div>
+              )}
+              <label className="form-field">
+                Name
+                <input
+                  data-initial-focus
+                  required
+                  maxLength={60}
+                  value={draft.name}
+                  onChange={(e) =>
+                    setDraft({ ...draft, name: e.target.value })
+                  }
+                />
+              </label>
+              <div className="form-row">
+                <fieldset className="icon-picker">
+                  <legend>Icon</legend>
+                  <div className="icon-choice-grid">
+                    {routineIconChoices.map((icon) => (
+                      <button
+                        key={icon}
+                        type="button"
+                        className={
+                          draft.icon === icon
+                            ? 'icon-choice is-selected'
+                            : 'icon-choice'
+                        }
+                        aria-label={`Use ${icon} icon`}
+                        aria-pressed={draft.icon === icon}
+                        onClick={() => setDraft({ ...draft, icon })}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="form-field icon-custom-field">
+                    Custom icon
+                    <input
+                      maxLength={40}
+                      value={draft.icon ?? ''}
+                      onChange={(e) =>
+                        setDraft({ ...draft, icon: e.target.value })
+                      }
+                    />
+                  </label>
+                </fieldset>
+                <label className="form-field">
+                  Color
+                  <input
+                    type="color"
+                    value={draft.color}
+                    onChange={(e) =>
+                      setDraft({ ...draft, color: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="form-field">
+                  Starts (optional)
+                  <input
+                    type="time"
+                    value={draft.startsAtLocal ?? ''}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        startsAtLocal: e.target.value || null,
+                      })
+                    }
+                  />
+                </label>
+                <label className="form-field">
+                  Ends (optional)
+                  <input
+                    type="time"
+                    value={draft.endsAtLocal ?? ''}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        endsAtLocal: e.target.value || null,
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  disabled={save.isPending}
+                >
+                  {save.isPending ? 'Saving…' : 'Save group'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleDialog>
       )}
       {archiveGroup && (
         <form

@@ -308,126 +308,161 @@ export function ParentRewards() {
             )}
           </section>
           {editing && (
-            <form className="card settings-form" onSubmit={submit}>
-              <h2>
-                {editing === 'new' ? 'Create reward' : `Edit ${editing.title}`}
-              </h2>
-              <label className="form-field">
-                Title
-                <input
-                  autoFocus
-                  required
-                  maxLength={100}
-                  value={draft.title}
-                  onChange={(e) =>
-                    setDraft({ ...draft, title: e.target.value })
-                  }
-                />
-              </label>
-              <label className="form-field">
-                Description (optional)
-                <textarea
-                  maxLength={500}
-                  value={draft.description ?? ''}
-                  onChange={(e) =>
-                    setDraft({ ...draft, description: e.target.value })
-                  }
-                />
-              </label>
-              <div className="form-row">
-                <label className="form-field">
-                  Icon
-                  <input
-                    maxLength={8}
-                    value={draft.icon ?? ''}
-                    onChange={(e) =>
-                      setDraft({ ...draft, icon: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="form-field">
-                  Cost in points
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={draft.costPoints}
-                    onChange={(e) =>
-                      setDraft({ ...draft, costPoints: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              </div>
-              <fieldset>
-                <legend>Eligible children</legend>
-                <label className="toggle-row">
-                  <input
-                    type="radio"
-                    name="availability"
-                    checked={draft.availabilityScope === 'all_active_children'}
-                    onChange={() =>
-                      setDraft({
-                        ...draft,
-                        availabilityScope: 'all_active_children',
-                        eligibleChildIds: [],
-                      })
-                    }
-                  />
-                  All active children
-                </label>
-                <label className="toggle-row">
-                  <input
-                    type="radio"
-                    name="availability"
-                    checked={draft.availabilityScope === 'selected_children'}
-                    onChange={() =>
-                      setDraft({
-                        ...draft,
-                        availabilityScope: 'selected_children',
-                      })
-                    }
-                  />
-                  Selected children
-                </label>
-                {children.data?.map((child) => (
-                  <label className="toggle-row" key={child.id}>
-                    <input
-                      type="checkbox"
-                      disabled={draft.availabilityScope !== 'selected_children'}
-                      checked={
-                        draft.eligibleChildIds?.includes(child.id) ?? false
-                      }
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          eligibleChildIds: e.target.checked
-                            ? [...(draft.eligibleChildIds ?? []), child.id]
-                            : (draft.eligibleChildIds ?? []).filter(
-                                (id) => id !== child.id,
-                              ),
-                        })
-                      }
-                    />
-                    {child.nickname}
-                  </label>
-                ))}
-              </fieldset>
-              <div className="form-actions">
+            <AccessibleDialog
+              titleId="reward-editor-heading"
+              backdropClassName="work-editor-backdrop"
+              className="work-editor-dialog"
+              onClose={() => setEditing(null)}
+            >
+              <div className="work-editor-header">
+                <div>
+                  <p className="eyebrow">Reward</p>
+                  <h2 id="reward-editor-heading">
+                    {editing === 'new'
+                      ? 'Create reward'
+                      : `Edit ${editing.title}`}
+                  </h2>
+                </div>
                 <button
-                  className="button button-primary"
-                  disabled={save.isPending}
-                >
-                  {save.isPending ? 'Saving…' : 'Save reward'}
-                </button>
-                <button
-                  className="button button-secondary"
+                  className="text-button"
                   type="button"
                   onClick={() => setEditing(null)}
                 >
-                  Cancel
+                  Close
                 </button>
               </div>
-            </form>
+              <div className="work-editor-body">
+                <form className="auth-form" onSubmit={submit}>
+                  {error && (
+                    <div className="form-alert" role="alert">
+                      {error}
+                    </div>
+                  )}
+                  <label className="form-field">
+                    Title
+                    <input
+                      data-initial-focus
+                      required
+                      maxLength={100}
+                      value={draft.title}
+                      onChange={(e) =>
+                        setDraft({ ...draft, title: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="form-field">
+                    Description (optional)
+                    <textarea
+                      maxLength={500}
+                      value={draft.description ?? ''}
+                      onChange={(e) =>
+                        setDraft({ ...draft, description: e.target.value })
+                      }
+                    />
+                  </label>
+                  <div className="form-row">
+                    <label className="form-field">
+                      Icon
+                      <input
+                        maxLength={40}
+                        value={draft.icon ?? ''}
+                        onChange={(e) =>
+                          setDraft({ ...draft, icon: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="form-field">
+                      Cost in points
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={draft.costPoints}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            costPoints: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <fieldset>
+                    <legend>Eligible children</legend>
+                    <label className="toggle-row">
+                      <input
+                        type="radio"
+                        name="availability"
+                        checked={
+                          draft.availabilityScope === 'all_active_children'
+                        }
+                        onChange={() =>
+                          setDraft({
+                            ...draft,
+                            availabilityScope: 'all_active_children',
+                            eligibleChildIds: [],
+                          })
+                        }
+                      />
+                      All active children
+                    </label>
+                    <label className="toggle-row">
+                      <input
+                        type="radio"
+                        name="availability"
+                        checked={draft.availabilityScope === 'selected_children'}
+                        onChange={() =>
+                          setDraft({
+                            ...draft,
+                            availabilityScope: 'selected_children',
+                          })
+                        }
+                      />
+                      Selected children
+                    </label>
+                    {children.data?.map((child) => (
+                      <label className="toggle-row" key={child.id}>
+                        <input
+                          type="checkbox"
+                          disabled={
+                            draft.availabilityScope !== 'selected_children'
+                          }
+                          checked={
+                            draft.eligibleChildIds?.includes(child.id) ?? false
+                          }
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              eligibleChildIds: e.target.checked
+                                ? [...(draft.eligibleChildIds ?? []), child.id]
+                                : (draft.eligibleChildIds ?? []).filter(
+                                    (id) => id !== child.id,
+                                  ),
+                            })
+                          }
+                        />
+                        {child.nickname}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <div className="form-actions">
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => setEditing(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="button button-primary"
+                      disabled={save.isPending}
+                    >
+                      {save.isPending ? 'Saving…' : 'Save reward'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </AccessibleDialog>
           )}
         </>
       )}

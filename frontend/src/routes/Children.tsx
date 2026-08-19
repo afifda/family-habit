@@ -9,6 +9,7 @@ import {
   type ChildInput,
 } from '../api/client';
 import { messageForError } from '../api/errors';
+import { AccessibleDialog } from '../components/AccessibleDialog';
 import { ChildAvatar } from '../components/ChildAvatar';
 import { FormField, SelectField } from '../components/FormField';
 
@@ -218,104 +219,124 @@ export function Children() {
       )}
 
       {editing && (
-        <section className="editor-card" aria-labelledby="editor-heading">
-          <h2 id="editor-heading">
-            {editing === 'new' ? 'Add a child' : `Edit ${editing.nickname}`}
-          </h2>
-          <form className="auth-form" onSubmit={submit} noValidate>
-            {formError && (
-              <div className="form-alert" role="alert">
-                {formError}
-              </div>
-            )}
-            <FormField
-              id="child-nickname"
-              label="Nickname"
-              maxLength={40}
-              value={draft.nickname}
-              onChange={(event) =>
-                setDraft({ ...draft, nickname: event.target.value })
-              }
-            />
-            {editing !== 'new' && editing.pinEnabled && (
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={removePin}
-                  onChange={(event) => setRemovePin(event.target.checked)}
-                />
-                Remove the current PIN
-              </label>
-            )}
-            <SelectField
-              id="child-avatar"
-              label="Avatar"
-              value={draft.avatar}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  avatar: event.target.value as ChildAvatarName,
-                })
-              }
-            >
-              {childAvatars.map((avatar) => (
-                <option key={avatar} value={avatar}>
-                  {avatar.charAt(0).toUpperCase() + avatar.slice(1)}
-                </option>
-              ))}
-            </SelectField>
-            <fieldset className="color-picker">
-              <legend>Profile color</legend>
-              <div>
-                {colors.map((color) => (
-                  <label key={color} style={{ backgroundColor: color }}>
-                    <input
-                      type="radio"
-                      name="color"
-                      value={color}
-                      checked={draft.color === color}
-                      onChange={() => setDraft({ ...draft, color })}
-                    />
-                    <span className="visually-hidden">{color}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <FormField
-              id="child-pin"
-              label="Child PIN (optional)"
-              hint={
-                editing !== 'new' && editing.pinEnabled
-                  ? 'Leave blank to keep the current PIN.'
-                  : 'Use 4 to 6 numbers, or leave blank for easy entry.'
-              }
-              inputMode="numeric"
-              autoComplete="off"
-              value={draft.pin}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  pin: event.target.value.replace(/\D/g, '').slice(0, 6),
-                })
-              }
-            />
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => setEditing(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                disabled={save.isPending}
-              >
-                {save.isPending ? 'Saving…' : 'Save profile'}
-              </button>
+        <AccessibleDialog
+          titleId="child-editor-heading"
+          backdropClassName="work-editor-backdrop"
+          className="work-editor-dialog"
+          onClose={() => setEditing(null)}
+        >
+          <div className="work-editor-header">
+            <div>
+              <p className="eyebrow">Child profile</p>
+              <h2 id="child-editor-heading">
+                {editing === 'new' ? 'Add a child' : `Edit ${editing.nickname}`}
+              </h2>
             </div>
-          </form>
-        </section>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setEditing(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="work-editor-body">
+            <form className="auth-form" onSubmit={submit} noValidate>
+              {formError && (
+                <div className="form-alert" role="alert">
+                  {formError}
+                </div>
+              )}
+              <FormField
+                id="child-nickname"
+                label="Nickname"
+                maxLength={40}
+                data-initial-focus
+                value={draft.nickname}
+                onChange={(event) =>
+                  setDraft({ ...draft, nickname: event.target.value })
+                }
+              />
+              {editing !== 'new' && editing.pinEnabled && (
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={removePin}
+                    onChange={(event) => setRemovePin(event.target.checked)}
+                  />
+                  Remove the current PIN
+                </label>
+              )}
+              <SelectField
+                id="child-avatar"
+                label="Avatar"
+                value={draft.avatar}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    avatar: event.target.value as ChildAvatarName,
+                  })
+                }
+              >
+                {childAvatars.map((avatar) => (
+                  <option key={avatar} value={avatar}>
+                    {avatar.charAt(0).toUpperCase() + avatar.slice(1)}
+                  </option>
+                ))}
+              </SelectField>
+              <fieldset className="color-picker">
+                <legend>Profile color</legend>
+                <div>
+                  {colors.map((color) => (
+                    <label key={color} style={{ backgroundColor: color }}>
+                      <input
+                        type="radio"
+                        name="color"
+                        value={color}
+                        checked={draft.color === color}
+                        onChange={() => setDraft({ ...draft, color })}
+                      />
+                      <span className="visually-hidden">{color}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <FormField
+                id="child-pin"
+                label="Child PIN (optional)"
+                hint={
+                  editing !== 'new' && editing.pinEnabled
+                    ? 'Leave blank to keep the current PIN.'
+                    : 'Use 4 to 6 numbers, or leave blank for easy entry.'
+                }
+                inputMode="numeric"
+                autoComplete="off"
+                value={draft.pin}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    pin: event.target.value.replace(/\D/g, '').slice(0, 6),
+                  })
+                }
+              />
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  disabled={save.isPending}
+                >
+                  {save.isPending ? 'Saving…' : 'Save profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleDialog>
       )}
     </section>
   );
